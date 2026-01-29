@@ -287,6 +287,49 @@ getDocs(COL).then(s=>{
   items=[{id:1,name:"예시",x:50,y:50,desc:"설명"}];
  render();
 });
+
+/* ⭐ 화면 내보내기 (PNG) */
+const exportBtn = document.getElementById("exportBtn");
+const includeListChk = document.getElementById("includeList");
+
+exportBtn.onclick = async () => {
+
+  // 편집모드에서는 막기
+  if (editMode) {
+    alert("뷰어모드에서만 내보내기 가능!");
+    return;
+  }
+
+  const includeList = includeListChk.checked;
+
+  const target = includeList
+    ? document.getElementById("captureRoot")
+    : document.getElementById("imageArea");
+
+  // 버튼/검색 숨기기
+  const topBar = document.querySelector(".top-bar");
+  const badge = document.getElementById("modeBadge");
+
+  const oldTopBarDisplay = topBar.style.display;
+  const oldBadgeDisplay = badge.style.display;
+
+  topBar.style.display = "none";
+  badge.style.display = "none";
+
+  const canvasCap = await html2canvas(target, {
+    backgroundColor: null,
+    useCORS: true
+  });
+
+  // 원상복구
+  topBar.style.display = oldTopBarDisplay;
+  badge.style.display = oldBadgeDisplay;
+
+  const link = document.createElement("a");
+  link.download = "map.png";
+  link.href = canvasCap.toDataURL("image/png");
+  link.click();
+};
 </script>
   
 </body>  
