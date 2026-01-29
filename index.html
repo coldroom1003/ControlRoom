@@ -117,54 +117,43 @@ li { background:#fffdf5; margin-bottom:10px; padding:8px; border:1px solid #ccc;
 <!-- Panzoom 라이브러리 -->
 <script src="https://unpkg.com/@panzoom/panzoom@9.4.0/dist/panzoom.min.js"></script>
 
-<!-- Firebase SDK -->
-<script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
-import { getFirestore, collection, getDocs, doc, setDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
+<!-- Firebase compat 방식 -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script>
+  const firebaseConfig = {
+    apiKey: "AIzaSyBULBV1bGrUBPE_vi0jGJWsOI1jOh-t1dE",
+    authDomain: "sound-control-room.firebaseapp.com",
+    projectId: "sound-control-room",
+    storageBucket: "sound-control-room.firebasestorage.app",
+    messagingSenderId: "332341186876",
+    appId: "1:332341186876:web:85e46d95ee6c624a8f4e39",
+    measurementId: "G-5KT7ZP42EY"
+  };
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.firestore();
+  const COL = db.collection("items");
+</script>
 
-const firebaseConfig = {
-  apiKey: "AIzaSyBULBV1bGrUBPE_vi0jGJWsOI1jOh-t1dE",
-  authDomain: "sound-control-room.firebaseapp.com",
-  projectId: "sound-control-room",
-  storageBucket: "sound-control-room.firebasestorage.app",
-  messagingSenderId: "332341186876",
-  appId: "1:332341186876:web:85e46d95ee6c624a8f4e39",
-  measurementId: "G-5KT7ZP42EY"
-};
+<script>
+let editMode=false;
+let longPressTimer=null;
+let items=[];
 
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
-const COL = collection(db, "items");
-
-let editMode = false;
-let longPressTimer = null;
-let items = [];
-
-const listEl = document.getElementById("itemList");
-const hitEl = document.getElementById("hitAreas");
-const highlightEl = document.getElementById("highlight");
-const imageArea = document.getElementById("imageArea");
+const listEl=document.getElementById("itemList");
+const hitEl=document.getElementById("hitAreas");
+const highlightEl=document.getElementById("highlight");
+const imageArea=document.getElementById("imageArea");
 
 /* 편집모드 */
-function toggleEditMode() {
-  editMode = !editMode;
+function toggleEditMode(){
+  editMode=!editMode;
   document.body.classList.toggle("edit-mode", editMode);
 }
 
 /* Firestore 저장/삭제 */
-async function saveItem(item){ await setDoc(doc(COL,String(item.id)),item); }
-async function deleteItem(item){ await deleteDoc(doc(COL,String(item.id))); }
-
-/* 추가 */
-async function addItemAtPosition(x,y){
-  const id=Date.now();
-  const newItem = {id, name:"새 물건", x, y, description:"설명을 입력하세요"};
-  items.push(newItem);
-  await saveItem(newItem);
-  renderAll();
-  selectItem(id);
-}
-function addItem(){ addItemAtPosition(50,50); }
+function saveItem(item){ return COL.doc(String(item.id)).set(item); }
+function deleteItemFirestore(item){ return COL.doc(String(item.id)).delete(); }
 
 /* 리스트 렌더 */
 function renderList(data=items){
@@ -175,7 +164,11 @@ function renderList(data=items){
     const title=document.createElement("div"); title.innerText=item.name;
     title.ondblclick=()=>editMode && makeEditable(title,v=>{item.name=v; saveItem(item); renderHitAreas();});
     const del=document.createElement("span"); del.className="delete-btn"; del.innerText="🗑";
-    del.onclick=e=>{e.stopPropagation(); items=items.filter(i=>i.id!==item.id); deleteItem(item); renderAll(); highlightEl.style.display="none";};
+    del.onclick=e=>{
+      e.stopPropagation();
+      items=items.filter(i=>i.id!==item.id);
+      deleteItemFirestore(item).then(()=>{renderAll(); highlightEl.style.display="none";});
+    };
     header.append(title,del);
     const detail=document.createElement("div"); detail.className="detail"; detail.innerText=item.description;
     detail.ondblclick=()=>editMode && makeEditable(detail,v=>{item.description=v; saveItem(item);});
@@ -188,8 +181,9 @@ function renderList(data=items){
 /* 편집 */
 function makeEditable(el,onSave){
   el.contentEditable=true; el.classList.add("editable"); el.focus();
-  el.onblur=finish; el.onkeydown=e=>{if(e.key==="Enter"){e.preventDefault(); finish();}};
-  function finish(){el.contentEditable=false; el.classList.remove("editable"); onSave(el.innerText.trim());}
+  el.onblur=finish;
+  el.onkeydown=e=>{if(e.key==="Enter"){e.preventDefault(); finish();}};
+  function finish(){ el.contentEditable=false; el.classList.remove("editable"); onSave(el.innerText.trim()); }
 }
 
 /* 그림 렌더 */
@@ -237,29 +231,38 @@ function enableDrag(el,item){
 /* 검색 */
 function filterItems(v){ renderList(items.filter(i=>i.name.includes(v))); }
 
-/* 추가 이벤트 */
-// PC 더블클릭
-imageArea.addEventListener("dblclick", async e => {
+/* 추가 */
+function addItemAtPosition(x,y){
+  const id=Date.now();
+  const newItem={id,name:"새 물건",x,y,description:"설명을 입력하세요"};
+  items.push(newItem);
+  saveItem(newItem).then(()=>{ renderAll(); selectItem(id); });
+}
+function addItem(){ addItemAtPosition(50,50); }
+
+/* 이벤트 */
+// 더블클릭 추가
+imageArea.addEventListener("dblclick", e=>{
   if(!editMode) return;
-  const rect = imageArea.getBoundingClientRect();
-  const x = ((e.clientX - rect.left)/rect.width)*100;
-  const y = ((e.clientY - rect.top)/rect.height)*100;
-  await addItemAtPosition(x,y);
+  const rect=imageArea.getBoundingClientRect();
+  const x=((e.clientX-rect.left)/rect.width)*100;
+  const y=((e.clientY-rect.top)/rect.height)*100;
+  addItemAtPosition(x,y);
 });
 
 // 모바일 길게 눌러 추가
-imageArea.addEventListener("touchstart", e => {
+imageArea.addEventListener("touchstart", e=>{
   if(!editMode) return;
-  const t = e.touches[0];
-  longPressTimer = setTimeout(async ()=>{
-    const rect = imageArea.getBoundingClientRect();
-    const x = ((t.clientX - rect.left)/rect.width)*100;
-    const y = ((t.clientY - rect.top)/rect.height)*100;
-    await addItemAtPosition(x,y);
+  const t=e.touches[0];
+  longPressTimer=setTimeout(()=>{
+    const rect=imageArea.getBoundingClientRect();
+    const x=((t.clientX-rect.left)/rect.width)*100;
+    const y=((t.clientY-rect.top)/rect.height)*100;
+    addItemAtPosition(x,y);
   },600);
 });
-imageArea.addEventListener("touchend", ()=>clearTimeout(longPressTimer));
-imageArea.addEventListener("touchmove", ()=>clearTimeout(longPressTimer));
+imageArea.addEventListener("touchend",()=>clearTimeout(longPressTimer));
+imageArea.addEventListener("touchmove",()=>clearTimeout(longPressTimer));
 
 // 보기모드 빈 공간 클릭 해제
 imageArea.addEventListener("click", e=>{
@@ -271,28 +274,19 @@ imageArea.addEventListener("click", e=>{
   }
 });
 
-// Panzoom 적용
-import Panzoom from "https://unpkg.com/@panzoom/panzoom@9.4.0/dist/panzoom.es.js";
+/* Panzoom 적용 */
 const panzoom = Panzoom(imageArea, { maxScale:3, minScale:1, contain:'outside' });
 imageArea.parentElement.addEventListener('wheel', panzoom.zoomWithWheel);
 
-// Firestore에서 로드
-async function loadItems(){
-  const snapshot = await getDocs(COL);
-  items = snapshot.docs.map(doc=>doc.data());
+/* Firestore에서 로드 */
+COL.get().then(snapshot=>{
+  items=snapshot.docs.map(doc=>doc.data());
   if(items.length===0){
     const id=Date.now();
     items.push({id,name:"예시 물건",x:50,y:50,description:"더블클릭/길게 눌러 추가"});
-    await saveItem(items[0]);
-  }
-  renderAll();
-}
-
-/* 전체 렌더 */
-function renderAll(){ renderList(); renderHitAreas(); }
-
-/* 초기 로드 */
-loadItems();
+    saveItem(items[0]).then(()=>{ renderAll(); });
+  } else { renderAll(); }
+});
 </script>
 </body>
 </html>
