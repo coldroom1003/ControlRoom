@@ -76,24 +76,15 @@ import { getFirestore, collection, getDocs, setDoc, doc, deleteDoc }
 from "https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore.js";
 
 /* Firebase */
-const app=initializeApp({
- apiKey:"AIzaSyBUL...",
- authDomain:"sound-control-room.firebaseapp.com",
- projectId:"sound-control-room"
+const app = initializeApp({
+  apiKey: "AIzaSyBULBV1bGrUBPE_vi0jGJWsOI1jOh-t1dE",
+  authDomain: "sound-control-room.firebaseapp.com",
+  projectId: "sound-control-room"
 });
-const db=getFirestore(app);
-const COL=collection(db,"items");
 
-/* ✅ Supabase */
-const supabase = window.supabase.createClient(
- "https://kpebsyuqtrvwbgbrvxoy.supabase.co",
- "sb_publishable_aOx9dt3MyHESbd1T_CyQ3Q_ANSIepqb"
-);
+const db = getFirestore(app);
+const COL = collection(db,"items");
 
-const BUCKET="backgrounds";
-const BG_FILE="bg.jpg";
-
-/* 상태 */
 let items=[];
 let editMode=false;
 
@@ -106,6 +97,7 @@ const highlight=document.getElementById("highlight");
 const badge=document.getElementById("modeBadge");
 const editBtn=document.getElementById("editBtn");
 const searchBox=document.getElementById("searchBox");
+
 const imgBtn=document.getElementById("imgBtn");
 const imgInput=document.getElementById("imgInput");
 const clearImgBtn=document.getElementById("clearImgBtn");
@@ -115,6 +107,28 @@ editBtn.onclick=()=>{
  editMode=!editMode;
  editBtn.classList.toggle("edit-on",editMode);
  badge.style.display=editMode?"block":"none";
+};
+
+/* 이미지 업로드 (로컬 미리보기용) */
+imgBtn.onclick=()=>{
+ if(!editMode) return;
+ imgInput.click();
+};
+
+imgInput.onchange=e=>{
+ if(!editMode) return;
+ const f=e.target.files[0];
+ if(!f) return;
+ const r=new FileReader();
+ r.onload=()=>{
+  canvas.style.background=`url(${r.result}) center/contain no-repeat`;
+ };
+ r.readAsDataURL(f);
+};
+
+clearImgBtn.onclick=()=>{
+ if(!editMode) return;
+ canvas.style.background="";
 };
 
 /* 저장 */
@@ -127,7 +141,7 @@ async function remove(id){
  render();
 }
 
-/* 편집 */
+/* 인라인 편집 */
 function makeEditable(el,onSave){
  el.contentEditable=true;
  el.focus();
@@ -137,46 +151,10 @@ function makeEditable(el,onSave){
  };
 }
 
-/* ✅ 배경 업로드 */
-imgBtn.onclick=()=>{
- if(!editMode) return;
- imgInput.click();
-};
-
-imgInput.onchange=async e=>{
- if(!editMode) return;
- const f=e.target.files[0];
- if(!f) return;
-
- const { error } = await supabase.storage
-  .from(BUCKET)
-  .upload(BG_FILE,f,{upsert:true});
-
- if(error){
-  alert("업로드 실패");
-  console.error(error);
-  return;
- }
-
- loadBG();
-};
-
-/* 배경 삭제 (로컬만) */
-clearImgBtn.onclick=()=>{
- if(!editMode) return;
- canvas.style.background="";
-};
-
-/* ✅ 배경 불러오기 */
-async function loadBG(){
- const { data } = supabase.storage
-  .from(BUCKET)
-  .getPublicUrl(BG_FILE);
-
- if(data?.publicUrl){
-  canvas.style.background=
-   `url(${data.publicUrl}) center/contain no-repeat`;
- }
+/* 렌더 */
+function render(){
+ renderHits();
+ renderList();
 }
 
 /* 라벨 */
@@ -200,7 +178,7 @@ function renderHits(){
 
   d.onclick=e=>{
    e.stopPropagation();
-   select(it);
+   select(it,true);
   };
 
   d.appendChild(t);
@@ -247,10 +225,9 @@ function renderList(){
   };
 
   li.onclick=()=>{
-   document.querySelectorAll(".detail")
-    .forEach(d=>d.style.display="none");
+   document.querySelectorAll(".detail").forEach(d=>d.style.display="none");
    detail.style.display="block";
-   select(it);
+   select(it,false);
   };
 
   li.append(del,title,detail);
@@ -258,24 +235,37 @@ function renderList(){
  });
 }
 
-function select(it){
+/* 선택 */
+function select(it,openList){
  highlight.style.left=it.x+"%";
  highlight.style.top=it.y+"%";
  highlight.style.display="block";
+
+ if(openList){
+  const idx=items.indexOf(it);
+  const li=listEl.children[idx];
+  if(li){
+   const d=li.querySelector(".detail");
+   document.querySelectorAll(".detail").forEach(x=>x.style.display="none");
+   d.style.display="block";
+  }
+ }
 }
 
-function render(){
- renderHits();
- renderList();
-}
-
-searchBox.oninput=renderList;
+/* 빈공간 클릭 해제 */
+imageArea.addEventListener("click",e=>{
+ if(editMode)return;
+ if(!e.target.closest(".hit-area")){
+  highlight.style.display="none";
+  document.querySelectorAll(".detail")
+    .forEach(d=>d.style.display="none");
+ }
+});
 
 /* 추가 */
 imageArea.ondblclick=e=>{
  if(!editMode)return;
  const r=imageArea.getBoundingClientRect();
-
  const it={
   id:Date.now(),
   name:"새 물건",
@@ -283,19 +273,19 @@ imageArea.ondblclick=e=>{
   y:(e.clientY-r.top)/r.height*100,
   desc:"설명"
  };
-
  items.push(it);
  save(it);
  render();
 };
 
-/* 초기 로드 */
+searchBox.oninput=renderList;
+
+/* 로드 */
 getDocs(COL).then(s=>{
  items=s.docs.map(d=>d.data());
  if(items.length===0)
   items=[{id:1,name:"예시",x:50,y:50,desc:"설명"}];
  render();
- loadBG();
 });
 </script>
   
