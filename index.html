@@ -6,7 +6,6 @@
 
 <link href="https://fonts.googleapis.com/css2?family=Nanum+Pen+Script&display=swap" rel="stylesheet">
 
-<!-- 캡처용 라이브러리 -->
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 
 <style>
@@ -15,18 +14,17 @@ body{margin:0;background:#faf7f2;}
 
 .container{
   display:grid;
-  grid-template-columns:8fr 2fr; /* ⭐ 8:2 */
+  grid-template-columns:8fr 2fr;
   height:100vh;
 }
 
 .mode-badge{
   position:fixed;top:10px;left:10px;
-  padding:6px 12px;
-  background:#ffe066;
-  border:2px solid #333;
-  display:none;z-index:999;
+  padding:6px 12px;background:#ffe066;
+  border:2px solid #333;display:none;z-index:999;
 }
 
+/* 이미지 영역 */
 .image-area{
   position:relative;
   border:2px solid #444;
@@ -34,18 +32,23 @@ body{margin:0;background:#faf7f2;}
   overflow:hidden;
 }
 
-#canvas{width:100%;height:100%;}
+#canvas{
+  width:100%;height:100%;
+  background-size:contain;
+  background-position:center;
+  background-repeat:no-repeat;
+}
 
 .sketch-bg{
   position:absolute;inset:0;
   background:repeating-linear-gradient(
-    to bottom,
     rgba(0,0,0,0.05) 1px,
     transparent 2px,
     transparent 6px
   );
 }
 
+/* 라벨 */
 .hit-area{
   position:absolute;
   transform:translate(-50%,-50%);
@@ -68,15 +71,28 @@ body{margin:0;background:#faf7f2;}
   pointer-events:none;
 }
 
+/* 리스트 */
 .info-area{
   border-left:2px dashed #aaa;
-  padding:10px;
+  padding:10px 10px 10px 16px;
   overflow-y:auto;
 }
 
-.top-bar{display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap;}
-button{font-size:18px;cursor:pointer;}
+.top-bar{
+  display:flex;
+  gap:6px;
+  margin-bottom:8px;
+  flex-wrap:wrap;
+}
+
+button{
+  font-size:18px;
+  cursor:pointer;
+  padding:6px 10px;
+}
+
 .edit-on{background:#ff7675;color:white;}
+
 .search{flex:1;padding:6px;}
 
 li{
@@ -84,6 +100,14 @@ li{
   margin-bottom:8px;
   padding:8px;
   border:1px solid #ccc;
+  cursor:pointer;
+  position:relative;
+}
+
+.del-btn{
+  position:absolute;
+  right:6px;top:2px;
+  color:#111;
   cursor:pointer;
 }
 
@@ -94,7 +118,39 @@ li{
   padding-left:6px;
 }
 
-.del-btn{float:right;cursor:pointer;}
+/* 모바일 */
+@media(max-width:600px){
+  .container{
+    grid-template-columns:1fr;
+    grid-template-rows:auto 1fr;
+  }
+
+  .image-area{
+    height:40vh;
+  }
+
+  .info-area{
+    height:60vh;
+    padding-bottom:90px;
+  }
+
+  .top-bar{
+    position:fixed;
+    bottom:0;left:0;right:0;
+    background:white;
+    border-top:2px solid #ccc;
+    padding:10px;
+    z-index:10;
+  }
+
+  button{
+    font-size:22px;
+    padding:10px;
+  }
+}
+
+/* 내보내기시 숨김 */
+.export-hide{display:none!important;}
 </style>
 </head>
 
@@ -113,21 +169,16 @@ li{
 </div>
 
 <div class="info-area" id="listPanel">
-  <div class="top-bar">
+  <div class="top-bar export-ui">
     <button id="editBtn">✏️</button>
     <button id="imgBtn">📷</button>
     <button id="clearImgBtn">❌</button>
-
-    <!-- ⭐ 내보내기 -->
     <button id="exportBtn">💾</button>
-    <label>
-      <input type="checkbox" id="includeList" checked>
-      리스트 포함
-    </label>
-
+    <label><input type="checkbox" id="includeList" checked>리스트</label>
     <input type="file" id="imgInput" hidden accept="image/*">
     <input id="searchBox" class="search" placeholder="검색">
   </div>
+
   <ul id="itemList"></ul>
 </div>
 
@@ -137,27 +188,30 @@ li{
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-app.js";
 import { getFirestore, collection, getDocs, setDoc, doc, deleteDoc }
 from "https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore.js";
+import { getStorage, ref, uploadBytes, getDownloadURL }
+from "https://www.gstatic.com/firebasejs/12.8.0/firebase-storage.js";
 
 /* Firebase */
 const app=initializeApp({
  apiKey:"AIzaSyBUL...",
  authDomain:"sound-control-room.firebaseapp.com",
- projectId:"sound-control-room"
+ projectId:"sound-control-room",
+ storageBucket:"sound-control-room.firebasestorage.app"
 });
 const db=getFirestore(app);
+const storage=getStorage(app);
+
 const COL=collection(db,"items");
+const CFG=doc(db,"config","bg");
 
 let items=[];
 let editMode=false;
 
 const canvas=document.getElementById("canvas");
-const imageArea=document.getElementById("imageArea");
 const hitWrap=document.getElementById("hitAreas");
 const listEl=document.getElementById("itemList");
 const highlight=document.getElementById("highlight");
 const badge=document.getElementById("modeBadge");
-const editBtn=document.getElementById("editBtn");
-const searchBox=document.getElementById("searchBox");
 
 /* 편집모드 */
 editBtn.onclick=()=>{
@@ -166,51 +220,30 @@ editBtn.onclick=()=>{
  badge.style.display=editMode?"block":"none";
 };
 
-/* ⭐ 사진 = 편집모드에서만 */
-imgBtn.onclick=()=>{
- if(!editMode) return;
- imgInput.click();
+/* 배경 업로드 */
+imgBtn.onclick=()=>{if(editMode)imgInput.click();};
+
+imgInput.onchange=async e=>{
+ if(!editMode)return;
+ const file=e.target.files[0];
+ const r=ref(storage,"bg.png");
+ await uploadBytes(r,file);
+ const url=await getDownloadURL(r);
+ canvas.style.backgroundImage=`url(${url})`;
+ await setDoc(CFG,{url});
 };
 
-imgInput.onchange=e=>{
- if(!editMode) return;
- const f=e.target.files[0];
- if(!f)return;
- const r=new FileReader();
- r.onload=()=>{
-  canvas.style.background=`url(${r.result}) center/contain no-repeat`;
- };
- r.readAsDataURL(f);
-};
-
-clearImgBtn.onclick=()=>{
- if(!editMode) return;
- canvas.style.background="";
+clearImgBtn.onclick=async ()=>{
+ if(!editMode)return;
+ canvas.style.backgroundImage="";
+ await setDoc(CFG,{url:""});
 };
 
 /* 저장 */
 const save=it=>setDoc(doc(db,"items",String(it.id)),it);
 
-/* 삭제 */
-async function remove(id){
- await deleteDoc(doc(db,"items",String(id)));
- items=items.filter(i=>i.id!==id);
- render();
-}
-
-/* 편집 */
-function makeEditable(el,onSave){
- el.contentEditable=true;
- el.focus();
- el.onblur=()=>{
-  el.contentEditable=false;
-  onSave(el.innerText);
- };
-}
-
 function render(){renderHits();renderList();}
 
-/* 라벨 */
 function renderHits(){
  hitWrap.innerHTML="";
  items.forEach(it=>{
@@ -223,15 +256,11 @@ function renderHits(){
   t.className="hit-title";
   t.innerText=it.name;
 
-  t.ondblclick=e=>{
-   if(!editMode)return;
-   e.stopPropagation();
-   makeEditable(t,v=>{it.name=v;save(it);render();});
-  };
-
   d.onclick=e=>{
    e.stopPropagation();
-   select(it,true);
+   highlight.style.left=it.x+"%";
+   highlight.style.top=it.y+"%";
+   highlight.style.display="block";
   };
 
   d.appendChild(t);
@@ -239,80 +268,44 @@ function renderHits(){
  });
 }
 
-/* 리스트 */
 function renderList(){
  listEl.innerHTML="";
  const q=searchBox.value.toLowerCase();
 
- const filtered=items.filter(i=>
-  (i.name||"").toLowerCase().includes(q) ||
+ items.filter(i=>
+  i.name.toLowerCase().includes(q) ||
   (i.desc||"").toLowerCase().includes(q)
- );
-
- filtered.forEach(it=>{
+ ).forEach(it=>{
   const li=document.createElement("li");
 
   const del=document.createElement("span");
-  del.innerText="🗑";
+  del.innerText="✕";
   del.className="del-btn";
   del.onclick=e=>{
    e.stopPropagation();
-   if(editMode)remove(it.id);
+   if(editMode){
+    deleteDoc(doc(db,"items",String(it.id)));
+    items=items.filter(x=>x.id!==it.id);
+    render();
+   }
   };
 
   const title=document.createElement("div");
   title.innerText=it.name;
 
-  title.ondblclick=e=>{
-   if(!editMode)return;
-   makeEditable(title,v=>{it.name=v;save(it);render();});
-  };
-
   const detail=document.createElement("div");
   detail.className="detail";
   detail.innerText=it.desc||"설명";
 
-  detail.ondblclick=e=>{
-   if(!editMode)return;
-   makeEditable(detail,v=>{it.desc=v;save(it);});
-  };
-
   li.onclick=()=>{
    document.querySelectorAll(".detail").forEach(d=>d.style.display="none");
    detail.style.display="block";
-   select(it,false);
   };
 
   li.append(del,title,detail);
   listEl.appendChild(li);
  });
 }
-
-function select(it,openList){
- highlight.style.left=it.x+"%";
- highlight.style.top=it.y+"%";
- highlight.style.display="block";
-
- if(openList){
-  const idx=items.indexOf(it);
-  const li=listEl.children[idx];
-  if(li){
-   const d=li.querySelector(".detail");
-   document.querySelectorAll(".detail").forEach(x=>x.style.display="none");
-   d.style.display="block";
-  }
- }
-}
-
-/* 빈공간 클릭 해제 */
-imageArea.addEventListener("click",e=>{
- if(editMode)return;
- if(!e.target.closest(".hit-area")){
-  highlight.style.display="none";
-  document.querySelectorAll(".detail")
-    .forEach(d=>d.style.display="none");
- }
-});
 
 /* 추가 */
 imageArea.ondblclick=e=>{
@@ -330,35 +323,39 @@ imageArea.ondblclick=e=>{
  render();
 };
 
-searchBox.oninput=renderList;
+/* 내보내기 */
+exportBtn.onclick=async ()=>{
+ if(editMode){alert("뷰어모드에서만 가능");return;}
 
-/* ⭐ 내보내기 */
-document.getElementById("exportBtn").onclick=async ()=>{
- if(editMode){
-  alert("뷰어모드에서만 내보내기 가능");
-  return;
- }
+ document.querySelectorAll(".export-ui")
+  .forEach(x=>x.classList.add("export-hide"));
 
- const include=document.getElementById("includeList").checked;
- const target=include
-   ? document.getElementById("captureRoot")
-   : document.getElementById("imageArea");
+ const target=includeList.checked
+  ? document.getElementById("captureRoot")
+  : document.getElementById("imageArea");
 
- const canvasCap=await html2canvas(target);
- const link=document.createElement("a");
- link.download="map.png";
- link.href=canvasCap.toDataURL("image/png");
- link.click();
+ const cap=await html2canvas(target);
+ const a=document.createElement("a");
+ a.download="map.png";
+ a.href=cap.toDataURL();
+ a.click();
+
+ document.querySelectorAll(".export-ui")
+  .forEach(x=>x.classList.remove("export-hide"));
 };
 
 /* 로드 */
-getDocs(COL).then(s=>{
- items=s.docs.map(d=>d.data());
- if(items.length===0)
-  items=[{id:1,name:"예시",x:50,y:50,desc:"설명"}];
+(async()=>{
+ const snap=await getDocs(COL);
+ items=snap.docs.map(d=>d.data());
  render();
-});
-</script>
 
+ const bg=await getDocs(collection(db,"config"));
+ bg.forEach(d=>{
+  const u=d.data().url;
+  if(u)canvas.style.backgroundImage=`url(${u})`;
+ });
+})();
+</script>
 </body>
 </html>
