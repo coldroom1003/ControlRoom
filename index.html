@@ -315,6 +315,25 @@ getDocs(COL).then(s=>{
   items=[{id:1,name:"예시",x:50,y:50,desc:"설명"}];
  render();
 });
+
+/* ⭐ 내보내기 */
+document.getElementById("exportBtn").onclick=async ()=>{
+ if(editMode){
+  alert("뷰어모드에서만 내보내기 가능");
+  return;
+ }
+
+ const include=document.getElementById("includeList").checked;
+ const target=include
+   ? document.getElementById("captureRoot")
+   : document.getElementById("imageArea");
+
+ const canvasCap=await html2canvas(target);
+ const link=document.createElement("a");
+ link.download="map.png";
+ link.href=canvasCap.toDataURL("image/png");
+ link.click();
+};
 </script>
   
 </body>  
