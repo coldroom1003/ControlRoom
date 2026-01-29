@@ -146,8 +146,6 @@ const COL=collection(db,"items");
 
 let items=[];
 let editMode=false;
-let scale=1,panX=0,panY=0;
-let longPressTimer;
 
 const canvas=document.getElementById("canvas");
 const imageArea=document.getElementById("imageArea");
@@ -182,9 +180,10 @@ clearImgBtn.onclick=()=>{
  canvas.style.background="";
 };
 
-/* 이하 로직 전부 기존과 동일 */
+/* 저장 */
 const save=it=>setDoc(doc(db,"items",String(it.id)),it);
 
+/* 삭제 */
 async function remove(id){
  await deleteDoc(doc(db,"items",String(id)));
  items=items.filter(i=>i.id!==id);
@@ -225,7 +224,6 @@ function renderHits(){
    select(it,true);
   };
 
-  enableDrag(d,it);
   d.appendChild(t);
   hitWrap.appendChild(d);
  });
@@ -295,22 +293,16 @@ function select(it,openList){
  }
 }
 
-function enableDrag(el,it){
- let drag=false;
- el.onmousedown=()=>{if(editMode)drag=true;};
- window.onmousemove=e=>{
-  if(!drag)return;
-  const r=imageArea.getBoundingClientRect();
-  it.x=(e.clientX-r.left)/r.width*100;
-  it.y=(e.clientY-r.top)/r.height*100;
-  el.style.left=it.x+"%";
-  el.style.top=it.y+"%";
- };
- window.onmouseup=()=>{
-  if(drag)save(it);
-  drag=false;
- };
-}
+/* ⭐ 여기 추가됨 */
+imageArea.addEventListener("click",e=>{
+ if(editMode) return;
+
+ if(!e.target.closest(".hit-area")){
+  highlight.style.display="none";
+  document.querySelectorAll(".detail")
+    .forEach(d=>d.style.display="none");
+ }
+});
 
 imageArea.ondblclick=e=>{
  if(!editMode)return;
