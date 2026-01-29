@@ -5,7 +5,6 @@
 <title>공간 네이밍 맵</title>
 
 <link href="https://fonts.googleapis.com/css2?family=Nanum+Pen+Script&display=swap" rel="stylesheet">
-
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 
 <style>
@@ -13,185 +12,133 @@
 body{margin:0;background:#faf7f2;}
 
 .container{
-  display:grid;
-  grid-template-columns:8fr 2fr;
-  height:100vh;
+ display:grid;
+ grid-template-columns:8fr 2fr;
+ height:100vh;
 }
 
-.mode-badge{
-  position:fixed;top:10px;left:10px;
-  padding:6px 12px;background:#ffe066;
-  border:2px solid #333;display:none;z-index:999;
+/* 리스트 숨김 */
+.container.hide-list{
+ grid-template-columns:1fr;
+}
+.container.hide-list .info-area{
+ display:none;
 }
 
-/* 이미지 영역 */
+/* 이미지 */
 .image-area{
-  position:relative;
-  border:2px solid #444;
-  background:white;
-  overflow:hidden;
+ position:relative;
+ border:2px solid #444;
+ background:white;
+ overflow:hidden;
 }
 
 #canvas{
-  width:100%;height:100%;
-  background-size:contain;
-  background-position:center;
-  background-repeat:no-repeat;
+ width:100%;height:100%;
+ background-position:center;
+ background-repeat:no-repeat;
+ background-size:contain;
 }
 
-.sketch-bg{
-  position:absolute;inset:0;
-  background:repeating-linear-gradient(
-    rgba(0,0,0,0.05) 1px,
-    transparent 2px,
-    transparent 6px
-  );
-}
-
-/* 라벨 */
 .hit-area{
-  position:absolute;
-  transform:translate(-50%,-50%);
+ position:absolute;
+ transform:translate(-50%,-50%);
 }
 
 .hit-title{
-  background:#fffdf5;
-  border:1px solid #333;
-  padding:4px 8px;
-  cursor:pointer;
+ background:#fff;
+ border:1px solid #333;
+ padding:4px 8px;
+ cursor:pointer;
 }
 
 .highlight{
-  position:absolute;
-  width:40px;height:26px;
-  background:rgba(255,235,59,0.7);
-  border-radius:50%;
-  transform:translate(-50%,-50%);
-  display:none;
-  pointer-events:none;
+ position:absolute;
+ width:40px;height:26px;
+ background:rgba(255,235,59,.7);
+ border-radius:50%;
+ display:none;
+ transform:translate(-50%,-50%);
 }
 
-/* 리스트 */
 .info-area{
-  border-left:2px dashed #aaa;
-  padding:10px 10px 10px 16px;
-  overflow-y:auto;
+ border-left:2px dashed #aaa;
+ padding:10px 10px 10px 16px;
+ overflow-y:auto;
 }
 
 .top-bar{
-  display:flex;
-  gap:6px;
-  margin-bottom:8px;
-  flex-wrap:wrap;
+ display:flex;
+ gap:6px;
+ flex-wrap:wrap;
 }
 
-button{
-  font-size:18px;
-  cursor:pointer;
-  padding:6px 10px;
-}
-
-.edit-on{background:#ff7675;color:white;}
-
-.search{flex:1;padding:6px;}
+button{font-size:18px;padding:6px;}
 
 li{
-  background:#fffdf5;
-  margin-bottom:8px;
-  padding:8px;
-  border:1px solid #ccc;
-  cursor:pointer;
-  position:relative;
+ background:#fff;
+ margin-bottom:8px;
+ padding:8px;
+ position:relative;
+ cursor:pointer;
 }
 
 .del-btn{
-  position:absolute;
-  right:6px;top:2px;
-  color:#111;
-  cursor:pointer;
+ position:absolute;
+ right:6px;top:4px;
+ cursor:pointer;
 }
 
 .detail{
-  display:none;
-  margin-top:6px;
-  border-left:4px solid #f4d03f;
-  padding-left:6px;
+ display:none;
+ border-left:4px solid #f4d03f;
+ padding-left:6px;
+ margin-top:6px;
 }
 
 /* 모바일 */
-@media(max-width:600px){
-  .container{
-    grid-template-columns:1fr;
-    grid-template-rows:auto 1fr;
-  }
-
-  .image-area{
-    height:40vh;
-  }
-
-  .info-area{
-    height:60vh;
-    padding-bottom:90px;
-  }
-
-  .top-bar{
-    position:fixed;
-    bottom:0;left:0;right:0;
-    background:white;
-    border-top:2px solid #ccc;
-    padding:10px;
-    z-index:10;
-  }
-
-  button{
-    font-size:22px;
-    padding:10px;
-  }
+@media (max-width:900px) and (orientation:portrait){
+ .container{
+  grid-template-columns:1fr;
+  grid-template-rows:45vh 1fr;
+ }
+ .image-area{height:45vh;}
 }
-
-/* 내보내기시 숨김 */
-.export-hide{display:none!important;}
 </style>
 </head>
 
 <body>
 
-<div id="modeBadge" class="mode-badge">✏️ 편집모드</div>
-
-<div class="container" id="captureRoot">
+<div class="container" id="wrap">
 
 <div class="image-area" id="imageArea">
-  <div id="canvas">
-    <div class="sketch-bg"></div>
-    <div id="hitAreas"></div>
-    <div id="highlight" class="highlight"></div>
-  </div>
+ <div id="canvas">
+  <div id="hitAreas"></div>
+  <div id="highlight" class="highlight"></div>
+ </div>
 </div>
 
-<div class="info-area" id="listPanel">
-  <div class="top-bar export-ui">
-    <button id="editBtn">✏️</button>
-    <button id="imgBtn">📷</button>
-    <button id="clearImgBtn">❌</button>
-    <button id="exportBtn">💾</button>
-    <label><input type="checkbox" id="includeList" checked>리스트</label>
-    <input type="file" id="imgInput" hidden accept="image/*">
-    <input id="searchBox" class="search" placeholder="검색">
-  </div>
-
-  <ul id="itemList"></ul>
+<div class="info-area">
+ <div class="top-bar">
+  <button id="editBtn">✏️</button>
+  <button id="imgBtn">📷</button>
+  <button id="toggleListBtn">☰</button>
+  <button id="exportBtn">💾</button>
+  <input id="searchBox" placeholder="검색">
+  <input type="file" id="imgInput" hidden accept="image/*">
+ </div>
+ <ul id="itemList"></ul>
 </div>
 
 </div>
 
 <script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-app.js";
-import { getFirestore, collection, getDocs, setDoc, doc, deleteDoc }
+import {initializeApp} from "https://www.gstatic.com/firebasejs/12.8.0/firebase-app.js";
+import {getFirestore,collection,getDocs,setDoc,doc,deleteDoc}
 from "https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore.js";
-import { getStorage, ref, uploadBytes, getDownloadURL }
+import {getStorage,ref,uploadBytes,getDownloadURL}
 from "https://www.gstatic.com/firebasejs/12.8.0/firebase-storage.js";
 
-/* Firebase */
 const app=initializeApp({
  apiKey:"AIzaSyBUL...",
  authDomain:"sound-control-room.firebaseapp.com",
@@ -201,9 +148,6 @@ const app=initializeApp({
 const db=getFirestore(app);
 const storage=getStorage(app);
 
-const COL=collection(db,"items");
-const CFG=doc(db,"config","bg");
-
 let items=[];
 let editMode=false;
 
@@ -211,77 +155,78 @@ const canvas=document.getElementById("canvas");
 const hitWrap=document.getElementById("hitAreas");
 const listEl=document.getElementById("itemList");
 const highlight=document.getElementById("highlight");
-const badge=document.getElementById("modeBadge");
 
-/* 편집모드 */
-editBtn.onclick=()=>{
- editMode=!editMode;
- editBtn.classList.toggle("edit-on",editMode);
- badge.style.display=editMode?"block":"none";
+editBtn.onclick=()=>editMode=!editMode;
+
+/* 리스트 접기 */
+toggleListBtn.onclick=()=>{
+ document.getElementById("wrap").classList.toggle("hide-list");
 };
 
-/* 배경 업로드 */
+/* 이미지 업로드 */
 imgBtn.onclick=()=>{if(editMode)imgInput.click();};
 
 imgInput.onchange=async e=>{
  if(!editMode)return;
  const file=e.target.files[0];
- const r=ref(storage,"bg.png");
+ const r=ref(storage,"bg");
  await uploadBytes(r,file);
  const url=await getDownloadURL(r);
- canvas.style.backgroundImage=`url(${url})`;
- await setDoc(CFG,{url});
+
+ canvas.style.backgroundImage=`url(${url})`; // 즉시 반영
+ await setDoc(doc(db,"config","bg"),{url});
 };
 
-clearImgBtn.onclick=async ()=>{
+/* 롱프레스 추가 */
+let pressTimer=null;
+imageArea.addEventListener("touchstart",e=>{
  if(!editMode)return;
- canvas.style.backgroundImage="";
- await setDoc(CFG,{url:""});
+ const t=e.touches[0];
+ pressTimer=setTimeout(()=>{
+  const r=imageArea.getBoundingClientRect();
+  addItem((t.clientX-r.left)/r.width*100,(t.clientY-r.top)/r.height*100);
+ },3000);
+});
+imageArea.addEventListener("touchend",()=>clearTimeout(pressTimer));
+
+/* 더블클릭 추가(PC) */
+imageArea.ondblclick=e=>{
+ if(!editMode)return;
+ const r=imageArea.getBoundingClientRect();
+ addItem((e.clientX-r.left)/r.width*100,(e.clientY-r.top)/r.height*100);
 };
 
-/* 저장 */
-const save=it=>setDoc(doc(db,"items",String(it.id)),it);
+function addItem(x,y){
+ const it={id:Date.now(),name:"새 물건",x,y,desc:"설명"};
+ items.push(it);
+ setDoc(doc(db,"items",String(it.id)),it);
+ render();
+}
 
-function render(){renderHits();renderList();}
-
-function renderHits(){
+function render(){
  hitWrap.innerHTML="";
+ listEl.innerHTML="";
  items.forEach(it=>{
   const d=document.createElement("div");
   d.className="hit-area";
   d.style.left=it.x+"%";
   d.style.top=it.y+"%";
-
-  const t=document.createElement("div");
-  t.className="hit-title";
-  t.innerText=it.name;
-
-  d.onclick=e=>{
-   e.stopPropagation();
+  d.innerHTML=`<div class="hit-title">${it.name}</div>`;
+  d.onclick=()=>{
    highlight.style.left=it.x+"%";
    highlight.style.top=it.y+"%";
    highlight.style.display="block";
   };
-
-  d.appendChild(t);
   hitWrap.appendChild(d);
- });
-}
 
-function renderList(){
- listEl.innerHTML="";
- const q=searchBox.value.toLowerCase();
-
- items.filter(i=>
-  i.name.toLowerCase().includes(q) ||
-  (i.desc||"").toLowerCase().includes(q)
- ).forEach(it=>{
   const li=document.createElement("li");
-
-  const del=document.createElement("span");
-  del.innerText="✕";
-  del.className="del-btn";
-  del.onclick=e=>{
+  li.innerHTML=`<span class="del-btn">✕</span>${it.name}
+   <div class="detail">${it.desc}</div>`;
+  li.onclick=()=>{
+   document.querySelectorAll(".detail").forEach(d=>d.style.display="none");
+   li.querySelector(".detail").style.display="block";
+  };
+  li.querySelector(".del-btn").onclick=e=>{
    e.stopPropagation();
    if(editMode){
     deleteDoc(doc(db,"items",String(it.id)));
@@ -289,71 +234,29 @@ function renderList(){
     render();
    }
   };
-
-  const title=document.createElement("div");
-  title.innerText=it.name;
-
-  const detail=document.createElement("div");
-  detail.className="detail";
-  detail.innerText=it.desc||"설명";
-
-  li.onclick=()=>{
-   document.querySelectorAll(".detail").forEach(d=>d.style.display="none");
-   detail.style.display="block";
-  };
-
-  li.append(del,title,detail);
   listEl.appendChild(li);
  });
 }
 
-/* 추가 */
-imageArea.ondblclick=e=>{
- if(!editMode)return;
- const r=imageArea.getBoundingClientRect();
- const it={
-  id:Date.now(),
-  name:"새 물건",
-  x:(e.clientX-r.left)/r.width*100,
-  y:(e.clientY-r.top)/r.height*100,
-  desc:"설명"
- };
- items.push(it);
- save(it);
- render();
-};
-
 /* 내보내기 */
 exportBtn.onclick=async ()=>{
- if(editMode){alert("뷰어모드에서만 가능");return;}
-
- document.querySelectorAll(".export-ui")
-  .forEach(x=>x.classList.add("export-hide"));
-
- const target=includeList.checked
-  ? document.getElementById("captureRoot")
-  : document.getElementById("imageArea");
-
- const cap=await html2canvas(target);
+ if(editMode)return alert("뷰어모드에서만 가능");
+ const cap=await html2canvas(document.getElementById("wrap"));
  const a=document.createElement("a");
- a.download="map.png";
  a.href=cap.toDataURL();
+ a.download="map.png";
  a.click();
-
- document.querySelectorAll(".export-ui")
-  .forEach(x=>x.classList.remove("export-hide"));
 };
 
 /* 로드 */
 (async()=>{
- const snap=await getDocs(COL);
- items=snap.docs.map(d=>d.data());
+ const s=await getDocs(collection(db,"items"));
+ items=s.docs.map(d=>d.data());
  render();
 
  const bg=await getDocs(collection(db,"config"));
  bg.forEach(d=>{
-  const u=d.data().url;
-  if(u)canvas.style.backgroundImage=`url(${u})`;
+  if(d.data().url)canvas.style.backgroundImage=`url(${d.data().url})`;
  });
 })();
 </script>
