@@ -135,10 +135,6 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const COL = collection(db, "items");
-</script>
-
-<script type="module">
-import { getDocs, setDoc, doc, deleteDoc } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 
 let editMode = false;
 let longPressTimer = null;
@@ -155,12 +151,16 @@ function toggleEditMode() {
   document.body.classList.toggle("edit-mode", editMode);
 }
 
+/* Firestore 저장/삭제 */
+async function saveItem(item){ await setDoc(doc(COL,String(item.id)),item); }
+async function deleteItem(item){ await deleteDoc(doc(COL,String(item.id))); }
+
 /* 추가 */
-function addItemAtPosition(x,y){
+async function addItemAtPosition(x,y){
   const id=Date.now();
-  const newItem = {id,name:"새 물건",x,y,description:"설명을 입력하세요"};
+  const newItem = {id, name:"새 물건", x, y, description:"설명을 입력하세요"};
   items.push(newItem);
-  saveItem(newItem);
+  await saveItem(newItem);
   renderAll();
   selectItem(id);
 }
@@ -238,31 +238,52 @@ function enableDrag(el,item){
 function filterItems(v){ renderList(items.filter(i=>i.name.includes(v))); }
 
 /* 추가 이벤트 */
-imageArea.addEventListener("dblclick",e=>{if(!editMode)return; const r=imageArea.getBoundingClientRect(); addItemAtPosition(((e.clientX-r.left)/r.width)*100,((e.clientY-r.top)/r.height)*100);});
-imageArea.addEventListener("touchstart",e=>{if(!editMode)return; const t=e.touches[0]; longPressTimer=setTimeout(()=>{const r=imageArea.getBoundingClientRect(); addItemAtPosition(((t.clientX-r.left)/r.width)*100,((t.clientY-r.top)/r.height)*100);},600);});
-imageArea.addEventListener("touchend",()=>clearTimeout(longPressTimer));
-imageArea.addEventListener("touchmove",()=>clearTimeout(longPressTimer));
+// PC 더블클릭
+imageArea.addEventListener("dblclick", async e => {
+  if(!editMode) return;
+  const rect = imageArea.getBoundingClientRect();
+  const x = ((e.clientX - rect.left)/rect.width)*100;
+  const y = ((e.clientY - rect.top)/rect.height)*100;
+  await addItemAtPosition(x,y);
+});
 
-/* 보기모드 빈 공간 클릭 해제 */
-imageArea.addEventListener("click",e=>{if(editMode)return;if(!e.target.closest(".hit-area")){document.querySelectorAll(".hit-area").forEach(h=>h.classList.remove("selected"));document.querySelectorAll(".detail").forEach(d=>d.style.display="none");highlightEl.style.display="none";}})
+// 모바일 길게 눌러 추가
+imageArea.addEventListener("touchstart", e => {
+  if(!editMode) return;
+  const t = e.touches[0];
+  longPressTimer = setTimeout(async ()=>{
+    const rect = imageArea.getBoundingClientRect();
+    const x = ((t.clientX - rect.left)/rect.width)*100;
+    const y = ((t.clientY - rect.top)/rect.height)*100;
+    await addItemAtPosition(x,y);
+  },600);
+});
+imageArea.addEventListener("touchend", ()=>clearTimeout(longPressTimer));
+imageArea.addEventListener("touchmove", ()=>clearTimeout(longPressTimer));
 
-/* Panzoom 적용 */
+// 보기모드 빈 공간 클릭 해제
+imageArea.addEventListener("click", e=>{
+  if(editMode) return;
+  if(!e.target.closest(".hit-area")){
+    document.querySelectorAll(".hit-area").forEach(h=>h.classList.remove("selected"));
+    document.querySelectorAll(".detail").forEach(d=>d.style.display="none");
+    highlightEl.style.display="none";
+  }
+});
+
+// Panzoom 적용
 import Panzoom from "https://unpkg.com/@panzoom/panzoom@9.4.0/dist/panzoom.es.js";
 const panzoom = Panzoom(imageArea, { maxScale:3, minScale:1, contain:'outside' });
 imageArea.parentElement.addEventListener('wheel', panzoom.zoomWithWheel);
 
-/* Firestore 저장/삭제 */
-async function saveItem(item){ await setDoc(doc(COL,String(item.id)),item); }
-async function deleteItem(item){ await deleteDoc(doc(COL,String(item.id))); }
-
-/* Firestore에서 로드 */
+// Firestore에서 로드
 async function loadItems(){
   const snapshot = await getDocs(COL);
   items = snapshot.docs.map(doc=>doc.data());
   if(items.length===0){
     const id=Date.now();
     items.push({id,name:"예시 물건",x:50,y:50,description:"더블클릭/길게 눌러 추가"});
-    saveItem(items[0]);
+    await saveItem(items[0]);
   }
   renderAll();
 }
