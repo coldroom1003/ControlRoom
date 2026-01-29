@@ -70,231 +70,266 @@ li{background:#fffdf5;margin-bottom:8px;padding:8px;border:1px solid #ccc;cursor
   
 </div>  
   
-<script type="module">  
-import { initializeApp } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-app.js";  
-import { getFirestore, collection, getDocs, setDoc, doc, deleteDoc }  
-from "https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore.js";  
-  
-const app=initializeApp({  
- apiKey:"AIzaSyBUL...",  
- authDomain:"sound-control-room.firebaseapp.com",  
- projectId:"sound-control-room"  
-});  
-  
-const db=getFirestore(app);  
-const COL=collection(db,"items");  
-  
-let items=[];  
-let editMode=false;  
-  
-const canvas=document.getElementById("canvas");  
-const imageArea=document.getElementById("imageArea");  
-const hitWrap=document.getElementById("hitAreas");  
-const listEl=document.getElementById("itemList");  
-const highlight=document.getElementById("highlight");  
-const badge=document.getElementById("modeBadge");  
-const editBtn=document.getElementById("editBtn");  
-const searchBox=document.getElementById("searchBox");  
-const imgBtn=document.getElementById("imgBtn");  
-const imgInput=document.getElementById("imgInput");  
-const clearImgBtn=document.getElementById("clearImgBtn");  
-  
-/* 편집모드 */  
-editBtn.onclick=()=>{  
- editMode=!editMode;  
- editBtn.classList.toggle("edit-on",editMode);  
- badge.style.display=editMode?"block":"none";  
-};  
-  
-/* 사진 */  
-imgBtn.onclick=()=>{if(editMode)imgInput.click();};  
-  
-imgInput.onchange=e=>{  
- if(!editMode)return;  
- const f=e.target.files[0];  
- if(!f)return;  
- const r=new FileReader();  
- r.onload=()=>canvas.style.background=`url(${r.result}) center/contain no-repeat`;  
- r.readAsDataURL(f);  
-};  
-  
-clearImgBtn.onclick=()=>{if(editMode)canvas.style.background="";};  
-  
-/* 저장 */  
-const save=it=>setDoc(doc(db,"items",String(it.id)),it);  
-  
-async function remove(id){  
- await deleteDoc(doc(db,"items",String(id)));  
- items=items.filter(i=>i.id!==id);  
- render();  
-}  
-  
-function makeEditable(el,onSave){  
- el.contentEditable=true;  
- el.focus();  
- el.onblur=()=>{el.contentEditable=false;onSave(el.innerText);};  
-}  
-  
-function render(){renderHits();renderList();}  
-  
-/* 라벨 */  
-function renderHits(){  
- hitWrap.innerHTML="";  
- items.forEach(it=>{  
-  const d=document.createElement("div");  
-  d.className="hit-area";  
-  d.style.left=it.x+"%";  
-  d.style.top=it.y+"%";  
-  
-  const t=document.createElement("div");  
-  t.className="hit-title";  
-  t.innerText=it.name;  
-  
-  t.ondblclick=e=>{  
-   if(!editMode)return;  
-   e.stopPropagation();  
-   makeEditable(t,v=>{it.name=v;save(it);render();});  
-  };  
-  
-  d.onclick=e=>{e.stopPropagation();select(it,true);};  
-  
-  d.appendChild(t);  
-  hitWrap.appendChild(d);  
- });  
-}  
-  
-/* 리스트 */  
-function renderList(){  
- listEl.innerHTML="";  
- const q=searchBox.value.toLowerCase();  
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-app.js";
+import { getFirestore, collection, getDocs, setDoc, doc, deleteDoc }
+from "https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore.js";
+import { getStorage, ref, uploadBytes, getDownloadURL }
+from "https://www.gstatic.com/firebasejs/12.8.0/firebase-storage.js";
 
- const filtered=items.filter(i=>  
-  (i.name||"").toLowerCase().includes(q)||  
-  (i.desc||"").toLowerCase().includes(q)  
- );  
+/* Firebase */
+const app=initializeApp({
+ apiKey:"AIzaSyBUL...",
+ authDomain:"sound-control-room.firebaseapp.com",
+ projectId:"sound-control-room"
+});
 
- filtered.forEach(it=>{  
-  const li=document.createElement("li");  
-  li.dataset.id=it.id;  
+const db=getFirestore(app);
+const storage=getStorage(app);
 
-  /* 삭제버튼 */
-  const del=document.createElement("span");  
-  del.innerText="🗑";  
-  del.className="del-btn";  
-  del.onclick=e=>{  
-   e.stopPropagation();  
-   if(editMode)remove(it.id);  
-  };  
+const COL=collection(db,"items");
 
-  /* 타이틀 */
-  const title=document.createElement("div");  
-  title.innerText=it.name;  
+/* 상태 */
+let items=[];
+let editMode=false;
 
-  title.ondblclick=e=>{  
-   if(!editMode)return;  
-   e.stopPropagation();  
-   makeEditable(title,v=>{  
-    it.name=v;  
-    save(it);  
-    render();  
-   });  
-  };  
+/* DOM */
+const canvas=document.getElementById("canvas");
+const imageArea=document.getElementById("imageArea");
+const hitWrap=document.getElementById("hitAreas");
+const listEl=document.getElementById("itemList");
+const highlight=document.getElementById("highlight");
+const badge=document.getElementById("modeBadge");
+const editBtn=document.getElementById("editBtn");
+const searchBox=document.getElementById("searchBox");
+const imgBtn=document.getElementById("imgBtn");
+const imgInput=document.getElementById("imgInput");
+const clearImgBtn=document.getElementById("clearImgBtn");
 
-  /* 설명 */
-  const detail=document.createElement("div");  
-  detail.className="detail";  
-  detail.innerText=it.desc||"설명";  
+/* 편집모드 */
+editBtn.onclick=()=>{
+ editMode=!editMode;
+ editBtn.classList.toggle("edit-on",editMode);
+ badge.style.display=editMode?"block":"none";
+};
 
-  detail.ondblclick=e=>{  
-   if(!editMode)return;  
-   e.stopPropagation();  
-   makeEditable(detail,v=>{  
-    it.desc=v;  
-    save(it);  
-   });  
-  };  
+/* 저장 */
+const save=it=>setDoc(doc(db,"items",String(it.id)),it);
 
-  /* 클릭시 열기 */
-  li.onclick=()=>{  
-   document.querySelectorAll(".detail")  
-     .forEach(d=>d.style.display="none");  
-
-   detail.style.display="block";  
-   select(it,false);  
-  };  
-
-  li.append(del,title,detail);  
-  listEl.appendChild(li);  
- });  
+/* 삭제 */
+async function remove(id){
+ await deleteDoc(doc(db,"items",String(id)));
+ items=items.filter(i=>i.id!==id);
+ render();
 }
-  
-/* ⭐ id 기반 선택 (핵심 수정) */  
-function select(it,openList){  
- highlight.style.left=it.x+"%";  
- highlight.style.top=it.y+"%";  
- highlight.style.display="block";  
-  
- if(openList){  
-  const li=listEl.querySelector(`li[data-id="${it.id}"]`);  
-  if(li){  
-   document.querySelectorAll(".detail")  
-    .forEach(x=>x.style.display="none");  
-  
-   const d=li.querySelector(".detail");  
-   if(d)d.style.display="block";  
-  
-   li.scrollIntoView({behavior:"smooth",block:"center"});  
-  }  
- }  
-}  
-  
-/* 빈공간 해제 */  
-imageArea.addEventListener("click",e=>{  
- if(editMode)return;  
- if(!e.target.closest(".hit-area")){  
-  highlight.style.display="none";  
-  document.querySelectorAll(".detail")  
-   .forEach(d=>d.style.display="none");  
- }  
-});  
-  
-/* 추가 */  
-imageArea.ondblclick=e=>{  
- if(!editMode)return;  
- const r=imageArea.getBoundingClientRect();  
- const it={  
-  id:Date.now(),  
-  name:"새 물건",  
-  x:(e.clientX-r.left)/r.width*100,  
-  y:(e.clientY-r.top)/r.height*100,  
-  desc:"설명"  
- };  
- items.push(it);  
- save(it);  
- render();  
-};  
-  
-searchBox.oninput=renderList;  
-  
-/* 내보내기 */  
-exportBtn.onclick=async()=>{  
- if(editMode)return alert("뷰어모드에서만 가능");  
- const include=includeList.checked;  
- const target=include?captureRoot:imageArea;  
- const c=await html2canvas(target);  
- const a=document.createElement("a");  
- a.download="map.png";  
- a.href=c.toDataURL();  
- a.click();  
-};  
-  
-/* 로드 */  
-getDocs(COL).then(s=>{  
- items=s.docs.map(d=>d.data());  
- if(items.length===0)items=[{id:1,name:"예시",x:50,y:50,desc:"설명"}];  
- render();  
-});  
-</script>  
+
+/* 편집 */
+function makeEditable(el,onSave){
+ el.contentEditable=true;
+ el.focus();
+ el.onblur=()=>{
+  el.contentEditable=false;
+  onSave(el.innerText);
+ };
+}
+
+/* ⭐ 배경 업로드 (Firebase Storage) */
+imgBtn.onclick=()=>{
+ if(!editMode)return;
+ imgInput.click();
+};
+
+imgInput.onchange=async e=>{
+ if(!editMode)return;
+
+ const f=e.target.files[0];
+ if(!f)return;
+
+ const storageRef=ref(storage,"background.jpg");
+
+ await uploadBytes(storageRef,f);
+ const url=await getDownloadURL(storageRef);
+
+ canvas.style.background=
+  `url(${url}) center/contain no-repeat`;
+
+ await setDoc(doc(db,"config","background"),{
+  url:url
+ });
+};
+
+/* ⭐ 배경 삭제 */
+clearImgBtn.onclick=async ()=>{
+ if(!editMode)return;
+
+ canvas.style.background="";
+
+ await setDoc(doc(db,"config","background"),{
+  url:""
+ });
+};
+
+/* 렌더 */
+function render(){renderHits();renderList();}
+
+/* 라벨 */
+function renderHits(){
+ hitWrap.innerHTML="";
+ items.forEach(it=>{
+  const d=document.createElement("div");
+  d.className="hit-area";
+  d.style.left=it.x+"%";
+  d.style.top=it.y+"%";
+
+  const t=document.createElement("div");
+  t.className="hit-title";
+  t.innerText=it.name;
+
+  t.ondblclick=e=>{
+   if(!editMode)return;
+   e.stopPropagation();
+   makeEditable(t,v=>{
+    it.name=v;save(it);render();
+   });
+  };
+
+  d.onclick=e=>{
+   e.stopPropagation();
+   select(it,true);
+  };
+
+  d.appendChild(t);
+  hitWrap.appendChild(d);
+ });
+}
+
+/* 리스트 */
+function renderList(){
+ listEl.innerHTML="";
+ const q=searchBox.value.toLowerCase();
+
+ const filtered=items.filter(i=>
+  (i.name||"").toLowerCase().includes(q)||
+  (i.desc||"").toLowerCase().includes(q)
+ );
+
+ filtered.forEach(it=>{
+  const li=document.createElement("li");
+  li.dataset.id=it.id;
+
+  const del=document.createElement("span");
+  del.innerText="🗑";
+  del.className="del-btn";
+  del.onclick=e=>{
+   e.stopPropagation();
+   if(editMode)remove(it.id);
+  };
+
+  const title=document.createElement("div");
+  title.innerText=it.name;
+
+  title.ondblclick=e=>{
+   if(!editMode)return;
+   makeEditable(title,v=>{
+    it.name=v;save(it);render();
+   });
+  };
+
+  const detail=document.createElement("div");
+  detail.className="detail";
+  detail.innerText=it.desc||"설명";
+
+  detail.ondblclick=e=>{
+   if(!editMode)return;
+   makeEditable(detail,v=>{
+    it.desc=v;save(it);
+   });
+  };
+
+  li.onclick=()=>{
+   document.querySelectorAll(".detail")
+     .forEach(d=>d.style.display="none");
+   detail.style.display="block";
+   select(it,false);
+  };
+
+  li.append(del,title,detail);
+  listEl.appendChild(li);
+ });
+}
+
+/* 선택 */
+function select(it,openList){
+ highlight.style.left=it.x+"%";
+ highlight.style.top=it.y+"%";
+ highlight.style.display="block";
+
+ if(openList){
+  const li=listEl.querySelector(
+   `li[data-id="${it.id}"]`
+  );
+  if(li){
+   document.querySelectorAll(".detail")
+    .forEach(x=>x.style.display="none");
+   const d=li.querySelector(".detail");
+   if(d)d.style.display="block";
+   li.scrollIntoView({behavior:"smooth",block:"center"});
+  }
+ }
+}
+
+/* 빈공간 해제 */
+imageArea.addEventListener("click",e=>{
+ if(editMode)return;
+ if(!e.target.closest(".hit-area")){
+  highlight.style.display="none";
+  document.querySelectorAll(".detail")
+   .forEach(d=>d.style.display="none");
+ }
+});
+
+/* 추가 */
+imageArea.ondblclick=e=>{
+ if(!editMode)return;
+
+ const r=imageArea.getBoundingClientRect();
+
+ const it={
+  id:Date.now(),
+  name:"새 물건",
+  x:(e.clientX-r.left)/r.width*100,
+  y:(e.clientY-r.top)/r.height*100,
+  desc:"설명"
+ };
+
+ items.push(it);
+ save(it);
+ render();
+};
+
+searchBox.oninput=renderList;
+
+/* 로드 */
+getDocs(COL).then(s=>{
+ items=s.docs.map(d=>d.data());
+ if(items.length===0)
+  items=[{id:1,name:"예시",x:50,y:50,desc:"설명"}];
+ render();
+});
+
+/* ⭐ 배경 로드 */
+getDocs(collection(db,"config")).then(s=>{
+ s.forEach(d=>{
+  if(d.id==="background"){
+   const url=d.data().url;
+   if(url){
+    canvas.style.background=
+     `url(${url}) center/contain no-repeat`;
+   }
+  }
+ });
+});
+</script> 
   
 </body>  
 </html>
