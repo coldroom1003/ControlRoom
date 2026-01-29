@@ -16,29 +16,31 @@ body{margin:0;background:#faf7f2;}
   height:100vh;
 }
 
-/* 편집모드 배지 */
 .mode-badge{
-  position:fixed;
-  top:10px;left:10px;
+  position:fixed;top:10px;left:10px;
   padding:6px 12px;
   background:#ffe066;
   border:2px solid #333;
-  z-index:999;
-  display:none;
+  display:none;z-index:999;
 }
 
-/* 그림 */
 .image-area{
   position:relative;
   border:2px solid #444;
   background:white;
+  overflow:hidden;
+  touch-action:none;
+}
+
+#canvas{
+  width:100%;height:100%;
+  transform-origin:0 0;
 }
 
 .sketch-bg{
   position:absolute;inset:0;
   background:repeating-linear-gradient(
     to bottom,
-    rgba(0,0,0,0.05),
     rgba(0,0,0,0.05) 1px,
     transparent 2px,
     transparent 6px
@@ -57,7 +59,6 @@ body{margin:0;background:#faf7f2;}
   cursor:pointer;
 }
 
-/* 하이라이트 */
 .highlight{
   position:absolute;
   width:40px;height:26px;
@@ -65,9 +66,9 @@ body{margin:0;background:#faf7f2;}
   border-radius:50%;
   transform:translate(-50%,-50%);
   display:none;
+  pointer-events:none;
 }
 
-/* 패널 */
 .info-area{
   border-left:2px dashed #aaa;
   padding:10px;
@@ -75,10 +76,8 @@ body{margin:0;background:#faf7f2;}
 }
 
 .top-bar{display:flex;gap:6px;margin-bottom:8px;}
-
 button{font-size:18px;cursor:pointer;}
 .edit-on{background:#ff7675;color:white;}
-
 .search{flex:1;padding:6px;}
 
 li{
@@ -98,8 +97,7 @@ li{
 
 .del-btn{float:right;cursor:pointer;}
 
-/* 모바일 */
-@media (max-width:768px){
+@media(max-width:768px){
   .container{display:flex;flex-direction:column;}
   .image-area{height:60vh;}
 }
@@ -112,19 +110,23 @@ li{
 
 <div class="container">
 
-  <div class="image-area" id="imageArea">
+<div class="image-area" id="imageArea">
+  <div id="canvas">
     <div class="sketch-bg"></div>
     <div id="hitAreas"></div>
     <div id="highlight" class="highlight"></div>
   </div>
+</div>
 
-  <div class="info-area">
-    <div class="top-bar">
-      <button id="editBtn">✏️ 편집</button>
-      <input id="searchBox" class="search" placeholder="검색">
-    </div>
-    <ul id="itemList"></ul>
+<div class="info-area">
+  <div class="top-bar">
+    <button id="editBtn">✏️</button>
+    <button id="imgBtn">📷</button>
+    <input type="file" id="imgInput" hidden accept="image/*">
+    <input id="searchBox" class="search" placeholder="검색">
   </div>
+  <ul id="itemList"></ul>
+</div>
 
 </div>
 
@@ -135,17 +137,19 @@ from "https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore.js";
 
 /* Firebase */
 const app=initializeApp({
-  apiKey:"AIzaSyBULBV1bGrUBPE_vi0jGJWsOI1jOh-t1dE",
-  authDomain:"sound-control-room.firebaseapp.com",
-  projectId:"sound-control-room"
+ apiKey:"AIzaSyBUL...",
+ authDomain:"sound-control-room.firebaseapp.com",
+ projectId:"sound-control-room"
 });
 const db=getFirestore(app);
 const COL=collection(db,"items");
 
-/* 상태 */
 let items=[];
 let editMode=false;
+let scale=1, panX=0, panY=0;
+let longPressTimer;
 
+const canvas=document.getElementById("canvas");
 const imageArea=document.getElementById("imageArea");
 const hitWrap=document.getElementById("hitAreas");
 const listEl=document.getElementById("itemList");
@@ -156,9 +160,21 @@ const searchBox=document.getElementById("searchBox");
 
 /* 편집모드 */
 editBtn.onclick=()=>{
-  editMode=!editMode;
-  editBtn.classList.toggle("edit-on",editMode);
-  badge.style.display=editMode?"block":"none";
+ editMode=!editMode;
+ editBtn.classList.toggle("edit-on",editMode);
+ badge.style.display=editMode?"block":"none";
+};
+
+/* 이미지 업로드 */
+imgBtn.onclick=()=>imgInput.click();
+imgInput.onchange=e=>{
+ const f=e.target.files[0];
+ if(!f)return;
+ const r=new FileReader();
+ r.onload=()=>{
+  canvas.style.background=`url(${r.result}) center/contain no-repeat`;
+ };
+ r.readAsDataURL(f);
 };
 
 /* 저장 */
@@ -166,192 +182,215 @@ const save=it=>setDoc(doc(db,"items",String(it.id)),it);
 
 /* 삭제 */
 async function remove(id){
-  await deleteDoc(doc(db,"items",String(id)));
-  items=items.filter(i=>i.id!==id);
-  render();
+ await deleteDoc(doc(db,"items",String(id)));
+ items=items.filter(i=>i.id!==id);
+ render();
 }
 
-/* 수정 helper */
+/* 수정 */
 function makeEditable(el,onSave){
-  el.contentEditable=true;
-  el.focus();
-  el.onblur=()=>{
-    el.contentEditable=false;
-    onSave(el.innerText);
-  };
+ el.contentEditable=true;
+ el.focus();
+ el.onblur=()=>{
+  el.contentEditable=false;
+  onSave(el.innerText);
+ };
 }
 
 /* 렌더 */
 function render(){
-  renderHits();
-  renderList();
+ renderHits();
+ renderList();
 }
 
 /* 라벨 */
 function renderHits(){
-  hitWrap.innerHTML="";
-  items.forEach(it=>{
-    const d=document.createElement("div");
-    d.className="hit-area";
-    d.style.left=it.x+"%";
-    d.style.top=it.y+"%";
+ hitWrap.innerHTML="";
+ items.forEach(it=>{
+  const d=document.createElement("div");
+  d.className="hit-area";
+  d.style.left=it.x+"%";
+  d.style.top=it.y+"%";
 
-    const t=document.createElement("div");
-    t.className="hit-title";
-    t.innerText=it.name||"이름";
+  const t=document.createElement("div");
+  t.className="hit-title";
+  t.innerText=it.name;
 
-    /* 라벨 이름 수정 */
-    t.ondblclick=e=>{
-      if(!editMode)return;
-      e.stopPropagation();
-      makeEditable(t,v=>{
-        it.name=v||"이름";
-        save(it);
-        render();
-      });
-    };
+  t.ondblclick=e=>{
+   if(!editMode)return;
+   e.stopPropagation();
+   makeEditable(t,v=>{
+    it.name=v;save(it);render();
+   });
+  };
 
-    d.onclick=e=>{
-      e.stopPropagation();
-      if(!editMode)select(it);
-    };
+  d.onclick=e=>{
+   e.stopPropagation();
+   select(it,true);
+  };
 
-    enableDrag(d,it);
-    d.appendChild(t);
-    hitWrap.appendChild(d);
-  });
+  enableDrag(d,it);
+  d.appendChild(t);
+  hitWrap.appendChild(d);
+ });
 }
 
 /* 리스트 */
 function renderList(){
-  listEl.innerHTML="";
+ listEl.innerHTML="";
+ const q=searchBox.value.toLowerCase();
 
-  const q=(searchBox.value||"").toLowerCase();
+ const filtered=items.filter(i=>
+  (i.name||"").toLowerCase().includes(q) ||
+  (i.desc||"").toLowerCase().includes(q)
+ );
 
-  const filtered=q
-    ? items.filter(i=>(i.name||"").toLowerCase().includes(q))
-    : items;
+ filtered.forEach(it=>{
+  const li=document.createElement("li");
 
-  filtered.forEach(it=>{
-    const li=document.createElement("li");
+  const del=document.createElement("span");
+  del.innerText="🗑";
+  del.className="del-btn";
+  del.onclick=e=>{
+   e.stopPropagation();
+   if(editMode)remove(it.id);
+  };
 
-    /* 삭제 */
-    const del=document.createElement("span");
-    del.innerText="🗑";
-    del.className="del-btn";
-    del.onclick=e=>{
-      e.stopPropagation();
-      if(editMode)remove(it.id);
-    };
+  const title=document.createElement("div");
+  title.innerText=it.name;
 
-    /* 제목 */
-    const title=document.createElement("div");
-    title.innerText=it.name||"이름";
+  title.ondblclick=e=>{
+   if(!editMode)return;
+   makeEditable(title,v=>{
+    it.name=v;save(it);render();
+   });
+  };
 
-    title.ondblclick=e=>{
-      if(!editMode)return;
-      makeEditable(title,v=>{
-        it.name=v;
-        save(it);
-        render();
-      });
-    };
+  const detail=document.createElement("div");
+  detail.className="detail";
+  detail.innerText=it.desc||"설명";
 
-    /* 부가설명 */
-    const detail=document.createElement("div");
-    detail.className="detail";
-    detail.innerText=it.desc||"부가 설명";
+  detail.ondblclick=e=>{
+   if(!editMode)return;
+   makeEditable(detail,v=>{
+    it.desc=v;save(it);
+   });
+  };
 
-    /* 설명 수정 */
-    detail.ondblclick=e=>{
-      if(!editMode)return;
-      makeEditable(detail,v=>{
-        it.desc=v;
-        save(it);
-      });
-    };
+  li.onclick=()=>{
+   document.querySelectorAll(".detail").forEach(d=>d.style.display="none");
+   detail.style.display="block";
+   select(it,false);
+  };
 
-    /* 토글 열기/닫기 */
-    li.onclick=()=>{
-      if(editMode)return;
-
-      const open = detail.style.display==="block";
-      document.querySelectorAll(".detail")
-        .forEach(d=>d.style.display="none");
-
-      detail.style.display=open?"none":"block";
-      select(it);
-    };
-
-    li.append(del,title,detail);
-    listEl.appendChild(li);
-  });
+  li.append(del,title,detail);
+  listEl.appendChild(li);
+ });
 }
 
 /* 선택 */
-function select(it){
-  highlight.style.left=it.x+"%";
-  highlight.style.top=it.y+"%";
-  highlight.style.display="block";
+function select(it,openList){
+ highlight.style.left=it.x+"%";
+ highlight.style.top=it.y+"%";
+ highlight.style.display="block";
+
+ if(openList){
+  const idx=items.indexOf(it);
+  const li=listEl.children[idx];
+  if(li){
+   const d=li.querySelector(".detail");
+   document.querySelectorAll(".detail").forEach(x=>x.style.display="none");
+   d.style.display="block";
+  }
+ }
 }
 
 /* 드래그 */
 function enableDrag(el,it){
-  let drag=false;
-  el.onmousedown=()=>{if(editMode)drag=true;};
-  window.onmousemove=e=>{
-    if(!drag)return;
-    const r=imageArea.getBoundingClientRect();
-    it.x=(e.clientX-r.left)/r.width*100;
-    it.y=(e.clientY-r.top)/r.height*100;
-    el.style.left=it.x+"%";
-    el.style.top=it.y+"%";
-  };
-  window.onmouseup=()=>{
-    if(drag)save(it);
-    drag=false;
-  };
+ let drag=false;
+ el.onmousedown=()=>{if(editMode)drag=true;};
+ window.onmousemove=e=>{
+  if(!drag)return;
+  const r=imageArea.getBoundingClientRect();
+  it.x=(e.clientX-r.left)/r.width*100;
+  it.y=(e.clientY-r.top)/r.height*100;
+  el.style.left=it.x+"%";
+  el.style.top=it.y+"%";
+ };
+ window.onmouseup=()=>{
+  if(drag)save(it);
+  drag=false;
+ };
 }
 
 /* 더블클릭 추가 */
 imageArea.ondblclick=e=>{
-  if(!editMode)return;
+ if(!editMode)return;
+ const r=imageArea.getBoundingClientRect();
+ const it={
+  id:Date.now(),
+  name:"새 물건",
+  x:(e.clientX-r.left)/r.width*100,
+  y:(e.clientY-r.top)/r.height*100,
+  desc:"설명"
+ };
+ items.push(it);
+ save(it);
+ render();
+};
 
+/* 롱프레스 추가 */
+imageArea.ontouchstart=e=>{
+ if(!editMode)return;
+ const t=e.touches[0];
+ longPressTimer=setTimeout(()=>{
   const r=imageArea.getBoundingClientRect();
-
   const it={
-    id:Date.now(),
-    name:"새 물건",
-    x:(e.clientX-r.left)/r.width*100,
-    y:(e.clientY-r.top)/r.height*100,
-    desc:"부가 설명"
+   id:Date.now(),
+   name:"새 물건",
+   x:(t.clientX-r.left)/r.width*100,
+   y:(t.clientY-r.top)/r.height*100,
+   desc:"설명"
   };
-
   items.push(it);
   save(it);
   render();
+ },600);
 };
+imageArea.ontouchend=()=>clearTimeout(longPressTimer);
+
+/* 줌/팬 */
+imageArea.onwheel=e=>{
+ e.preventDefault();
+ scale+=e.deltaY*-0.001;
+ scale=Math.min(Math.max(.5,scale),3);
+ canvas.style.transform=`translate(${panX}px,${panY}px) scale(${scale})`;
+};
+
+let panning=false,startX,startY;
+imageArea.onmousedown=e=>{
+ if(editMode)return;
+ panning=true;
+ startX=e.clientX-panX;
+ startY=e.clientY-panY;
+};
+window.onmousemove=e=>{
+ if(!panning)return;
+ panX=e.clientX-startX;
+ panY=e.clientY-startY;
+ canvas.style.transform=`translate(${panX}px,${panY}px) scale(${scale})`;
+};
+window.onmouseup=()=>panning=false;
 
 /* 검색 */
 searchBox.oninput=renderList;
 
-/* 빈공간 선택 해제 */
-imageArea.onclick=e=>{
-  if(editMode)return;
-  if(!e.target.closest(".hit-area")){
-    highlight.style.display="none";
-    document.querySelectorAll(".detail")
-      .forEach(d=>d.style.display="none");
-  }
-};
-
-/* Firestore 로드 */
+/* 로드 */
 getDocs(COL).then(s=>{
-  items=s.docs.map(d=>d.data());
-  if(items.length===0){
-    items=[{id:1,name:"예시",x:50,y:50,desc:"설명"}];
-  }
-  render();
+ items=s.docs.map(d=>d.data());
+ if(items.length===0)
+  items=[{id:1,name:"예시",x:50,y:50,desc:"설명"}];
+ render();
 });
 </script>
 
