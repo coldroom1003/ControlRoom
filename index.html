@@ -70,6 +70,9 @@ li{background:#fffdf5;margin-bottom:8px;padding:8px;border:1px solid #ccc;cursor
   
 </div>  
   
+<!-- Supabase 먼저 로드 -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-app.js";
 import { getFirestore, collection, getDocs, setDoc, doc, deleteDoc }
@@ -77,18 +80,22 @@ from "https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore.js";
 
 /* Firebase */
 const app = initializeApp({
-  apiKey: "AIzaSyBULBV1bGrUBPE_vi0jGJWsOI1jOh-t1dE",
-  authDomain: "sound-control-room.firebaseapp.com",
-  projectId: "sound-control-room"
+ apiKey:"AIzaSyBUL...",
+ authDomain:"sound-control-room.firebaseapp.com",
+ projectId:"sound-control-room"
 });
 
 const db = getFirestore(app);
 const COL = collection(db,"items");
 
+/* Supabase */
+const SUPA_URL = "https://kpebsyuqtrvwbgbrvxoy.supabase.co";
+const SUPA_KEY = "sb_publishable_aOx9dt3MyHESbd1T_CyQ3Q_ANSIepqb";
+const supa = window.supabase.createClient(SUPA_URL, SUPA_KEY);
+
 let items=[];
 let editMode=false;
 
-/* DOM */
 const canvas=document.getElementById("canvas");
 const imageArea=document.getElementById("imageArea");
 const hitWrap=document.getElementById("hitAreas");
@@ -97,10 +104,7 @@ const highlight=document.getElementById("highlight");
 const badge=document.getElementById("modeBadge");
 const editBtn=document.getElementById("editBtn");
 const searchBox=document.getElementById("searchBox");
-
-const imgBtn=document.getElementById("imgBtn");
 const imgInput=document.getElementById("imgInput");
-const clearImgBtn=document.getElementById("clearImgBtn");
 
 /* 편집모드 */
 editBtn.onclick=()=>{
@@ -109,26 +113,52 @@ editBtn.onclick=()=>{
  badge.style.display=editMode?"block":"none";
 };
 
-/* 이미지 업로드 (로컬 미리보기용) */
+/* ⭐ 이미지 업로드 (Supabase 저장) */
 imgBtn.onclick=()=>{
  if(!editMode) return;
  imgInput.click();
 };
 
-imgInput.onchange=e=>{
+imgInput.onchange = async e=>{
  if(!editMode) return;
- const f=e.target.files[0];
- if(!f) return;
- const r=new FileReader();
- r.onload=()=>{
-  canvas.style.background=`url(${r.result}) center/contain no-repeat`;
- };
- r.readAsDataURL(f);
+
+ const file=e.target.files[0];
+ if(!file) return;
+
+ const fileName="bg_"+Date.now();
+
+ const {error}=await supa.storage
+  .from("backgrounds")
+  .upload(fileName,file);
+
+ if(error){
+  alert("업로드 실패");
+  console.error(error);
+  return;
+ }
+
+ const {data:urlData}=supa.storage
+  .from("backgrounds")
+  .getPublicUrl(fileName);
+
+ const url=urlData.publicUrl;
+
+ canvas.style.background=`url(${url}) center/contain no-repeat`;
+
+ localStorage.setItem("bg",url);
 };
 
+/* 저장된 배경 불러오기 */
+const savedBg=localStorage.getItem("bg");
+if(savedBg){
+ canvas.style.background=`url(${savedBg}) center/contain no-repeat`;
+}
+
+/* 이미지 제거 */
 clearImgBtn.onclick=()=>{
  if(!editMode) return;
  canvas.style.background="";
+ localStorage.removeItem("bg");
 };
 
 /* 저장 */
@@ -141,7 +171,7 @@ async function remove(id){
  render();
 }
 
-/* 인라인 편집 */
+/* 편집 */
 function makeEditable(el,onSave){
  el.contentEditable=true;
  el.focus();
@@ -151,7 +181,6 @@ function makeEditable(el,onSave){
  };
 }
 
-/* 렌더 */
 function render(){
  renderHits();
  renderList();
@@ -192,7 +221,7 @@ function renderList(){
  const q=searchBox.value.toLowerCase();
 
  const filtered=items.filter(i=>
-  (i.name||"").toLowerCase().includes(q) ||
+  (i.name||"").toLowerCase().includes(q)||
   (i.desc||"").toLowerCase().includes(q)
  );
 
@@ -235,7 +264,6 @@ function renderList(){
  });
 }
 
-/* 선택 */
 function select(it,openList){
  highlight.style.left=it.x+"%";
  highlight.style.top=it.y+"%";
@@ -258,7 +286,7 @@ imageArea.addEventListener("click",e=>{
  if(!e.target.closest(".hit-area")){
   highlight.style.display="none";
   document.querySelectorAll(".detail")
-    .forEach(d=>d.style.display="none");
+   .forEach(d=>d.style.display="none");
  }
 });
 
@@ -287,49 +315,6 @@ getDocs(COL).then(s=>{
   items=[{id:1,name:"예시",x:50,y:50,desc:"설명"}];
  render();
 });
-
-/* ⭐ 화면 내보내기 (PNG) */
-const exportBtn = document.getElementById("exportBtn");
-const includeListChk = document.getElementById("includeList");
-
-exportBtn.onclick = async () => {
-
-  // 편집모드에서는 막기
-  if (editMode) {
-    alert("뷰어모드에서만 내보내기 가능!");
-    return;
-  }
-
-  const includeList = includeListChk.checked;
-
-  const target = includeList
-    ? document.getElementById("captureRoot")
-    : document.getElementById("imageArea");
-
-  // 버튼/검색 숨기기
-  const topBar = document.querySelector(".top-bar");
-  const badge = document.getElementById("modeBadge");
-
-  const oldTopBarDisplay = topBar.style.display;
-  const oldBadgeDisplay = badge.style.display;
-
-  topBar.style.display = "none";
-  badge.style.display = "none";
-
-  const canvasCap = await html2canvas(target, {
-    backgroundColor: null,
-    useCORS: true
-  });
-
-  // 원상복구
-  topBar.style.display = oldTopBarDisplay;
-  badge.style.display = oldBadgeDisplay;
-
-  const link = document.createElement("a");
-  link.download = "map.png";
-  link.href = canvasCap.toDataURL("image/png");
-  link.click();
-};
 </script>
   
 </body>  
