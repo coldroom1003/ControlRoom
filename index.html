@@ -16,12 +16,14 @@ body{margin:0;background:#faf7f2;}
   height:100vh;
 }
 
+/* 편집모드 배지 */
 .mode-badge{
   position:fixed;
   top:10px;left:10px;
   padding:6px 12px;
   background:#ffe066;
   border:2px solid #333;
+  z-index:999;
   display:none;
 }
 
@@ -36,8 +38,8 @@ body{margin:0;background:#faf7f2;}
   position:absolute;inset:0;
   background:repeating-linear-gradient(
     to bottom,
-    rgba(0,0,0,0.04),
-    rgba(0,0,0,0.04) 1px,
+    rgba(0,0,0,0.05),
+    rgba(0,0,0,0.05) 1px,
     transparent 2px,
     transparent 6px
   );
@@ -73,13 +75,11 @@ body{margin:0;background:#faf7f2;}
 }
 
 .top-bar{display:flex;gap:6px;margin-bottom:8px;}
-button{font-size:18px;}
+
+button{font-size:18px;cursor:pointer;}
 .edit-on{background:#ff7675;color:white;}
 
-.search{
-  flex:1;
-  padding:6px;
-}
+.search{flex:1;padding:6px;}
 
 li{
   background:#fffdf5;
@@ -96,10 +96,7 @@ li{
   padding-left:6px;
 }
 
-.del-btn{
-  float:right;
-  cursor:pointer;
-}
+.del-btn{float:right;cursor:pointer;}
 
 /* 모바일 */
 @media (max-width:768px){
@@ -123,7 +120,7 @@ li{
 
   <div class="info-area">
     <div class="top-bar">
-      <button id="editBtn">✏️</button>
+      <button id="editBtn">✏️ 편집</button>
       <input id="searchBox" class="search" placeholder="검색">
     </div>
     <ul id="itemList"></ul>
@@ -174,11 +171,14 @@ async function remove(id){
   render();
 }
 
-/* 수정 */
+/* 수정 helper */
 function makeEditable(el,onSave){
   el.contentEditable=true;
   el.focus();
-  el.onblur=()=>{el.contentEditable=false;onSave(el.innerText);}
+  el.onblur=()=>{
+    el.contentEditable=false;
+    onSave(el.innerText);
+  };
 }
 
 /* 렌더 */
@@ -187,6 +187,7 @@ function render(){
   renderList();
 }
 
+/* 라벨 */
 function renderHits(){
   hitWrap.innerHTML="";
   items.forEach(it=>{
@@ -199,7 +200,7 @@ function renderHits(){
     t.className="hit-title";
     t.innerText=it.name||"이름";
 
-    /* 라벨 수정 */
+    /* 라벨 이름 수정 */
     t.ondblclick=e=>{
       if(!editMode)return;
       e.stopPropagation();
@@ -221,18 +222,20 @@ function renderHits(){
   });
 }
 
+/* 리스트 */
 function renderList(){
   listEl.innerHTML="";
 
   const q=(searchBox.value||"").toLowerCase();
 
-  const filtered = q
+  const filtered=q
     ? items.filter(i=>(i.name||"").toLowerCase().includes(q))
     : items;
 
   filtered.forEach(it=>{
     const li=document.createElement("li");
 
+    /* 삭제 */
     const del=document.createElement("span");
     del.innerText="🗑";
     del.className="del-btn";
@@ -241,6 +244,7 @@ function renderList(){
       if(editMode)remove(it.id);
     };
 
+    /* 제목 */
     const title=document.createElement("div");
     title.innerText=it.name||"이름";
 
@@ -253,10 +257,12 @@ function renderList(){
       });
     };
 
+    /* 부가설명 */
     const detail=document.createElement("div");
     detail.className="detail";
-    detail.innerText=it.desc||"";
+    detail.innerText=it.desc||"부가 설명";
 
+    /* 설명 수정 */
     detail.ondblclick=e=>{
       if(!editMode)return;
       makeEditable(detail,v=>{
@@ -265,7 +271,17 @@ function renderList(){
       });
     };
 
-    li.onclick=()=>select(it);
+    /* 토글 열기/닫기 */
+    li.onclick=()=>{
+      if(editMode)return;
+
+      const open = detail.style.display==="block";
+      document.querySelectorAll(".detail")
+        .forEach(d=>d.style.display="none");
+
+      detail.style.display=open?"none":"block";
+      select(it);
+    };
 
     li.append(del,title,detail);
     listEl.appendChild(li);
@@ -277,15 +293,6 @@ function select(it){
   highlight.style.left=it.x+"%";
   highlight.style.top=it.y+"%";
   highlight.style.display="block";
-
-  document.querySelectorAll(".detail")
-  .forEach(d=>d.style.display="none");
-
-  const lis=[...listEl.children];
-  const idx=lis.findIndex(li=>li.innerText.includes(it.name));
-  if(idx>=0){
-    lis[idx].querySelector(".detail").style.display="block";
-  }
 }
 
 /* 드래그 */
@@ -300,12 +307,16 @@ function enableDrag(el,it){
     el.style.left=it.x+"%";
     el.style.top=it.y+"%";
   };
-  window.onmouseup=()=>{if(drag)save(it);drag=false;};
+  window.onmouseup=()=>{
+    if(drag)save(it);
+    drag=false;
+  };
 }
 
 /* 더블클릭 추가 */
 imageArea.ondblclick=e=>{
   if(!editMode)return;
+
   const r=imageArea.getBoundingClientRect();
 
   const it={
@@ -313,7 +324,7 @@ imageArea.ondblclick=e=>{
     name:"새 물건",
     x:(e.clientX-r.left)/r.width*100,
     y:(e.clientY-r.top)/r.height*100,
-    desc:""
+    desc:"부가 설명"
   };
 
   items.push(it);
@@ -324,21 +335,21 @@ imageArea.ondblclick=e=>{
 /* 검색 */
 searchBox.oninput=renderList;
 
-/* 빈공간 해제 */
+/* 빈공간 선택 해제 */
 imageArea.onclick=e=>{
   if(editMode)return;
   if(!e.target.closest(".hit-area")){
     highlight.style.display="none";
     document.querySelectorAll(".detail")
-    .forEach(d=>d.style.display="none");
+      .forEach(d=>d.style.display="none");
   }
 };
 
-/* 불러오기 */
+/* Firestore 로드 */
 getDocs(COL).then(s=>{
   items=s.docs.map(d=>d.data());
   if(items.length===0){
-    items=[{id:1,name:"예시",x:50,y:50,desc:""}];
+    items=[{id:1,name:"예시",x:50,y:50,desc:"설명"}];
   }
   render();
 });
