@@ -85,12 +85,9 @@ const db=getFirestore(app);
 const COL=collection(db,"items");
 
 /* ✅ Supabase */
-const SUPABASE_URL="https://kpebsyuqtrvwbgbrvxoy.supabase.co";
-const SUPABASE_KEY="sb_publishable_aOx9dt3MyHESbd1T_CyQ3Q_ANSIepqb";
-
 const supabase = window.supabase.createClient(
-  SUPABASE_URL,
-  SUPABASE_KEY
+ "https://kpebsyuqtrvwbgbrvxoy.supabase.co",
+ "sb_publishable_aOx9dt3MyHESbd1T_CyQ3Q_ANSIepqb"
 );
 
 const BUCKET="backgrounds";
@@ -130,7 +127,7 @@ async function remove(id){
  render();
 }
 
-/* 편집 가능 */
+/* 편집 */
 function makeEditable(el,onSave){
  el.contentEditable=true;
  el.focus();
@@ -140,7 +137,7 @@ function makeEditable(el,onSave){
  };
 }
 
-/* ✅ 배경 업로드 (Supabase) */
+/* ✅ 배경 업로드 */
 imgBtn.onclick=()=>{
  if(!editMode) return;
  imgInput.click();
@@ -148,7 +145,6 @@ imgBtn.onclick=()=>{
 
 imgInput.onchange=async e=>{
  if(!editMode) return;
-
  const f=e.target.files[0];
  if(!f) return;
 
@@ -162,31 +158,28 @@ imgInput.onchange=async e=>{
   return;
  }
 
- const { data } = supabase.storage
-  .from(BUCKET)
-  .getPublicUrl(BG_FILE);
-
- canvas.style.background=
-  `url(${data.publicUrl}) center/contain no-repeat`;
+ loadBG();
 };
 
-/* 배경 삭제 */
+/* 배경 삭제 (로컬만) */
 clearImgBtn.onclick=()=>{
  if(!editMode) return;
  canvas.style.background="";
 };
 
-/* ✅ 배경 자동 로드 */
+/* ✅ 배경 불러오기 */
 async function loadBG(){
  const { data } = supabase.storage
   .from(BUCKET)
   .getPublicUrl(BG_FILE);
 
- canvas.style.background=
-  `url(${data.publicUrl}) center/contain no-repeat`;
+ if(data?.publicUrl){
+  canvas.style.background=
+   `url(${data.publicUrl}) center/contain no-repeat`;
+ }
 }
 
-/* 라벨 렌더 */
+/* 라벨 */
 function renderHits(){
  hitWrap.innerHTML="";
  items.forEach(it=>{
@@ -207,7 +200,7 @@ function renderHits(){
 
   d.onclick=e=>{
    e.stopPropagation();
-   select(it,true);
+   select(it);
   };
 
   d.appendChild(t);
@@ -257,7 +250,7 @@ function renderList(){
    document.querySelectorAll(".detail")
     .forEach(d=>d.style.display="none");
    detail.style.display="block";
-   select(it,false);
+   select(it);
   };
 
   li.append(del,title,detail);
@@ -296,13 +289,13 @@ imageArea.ondblclick=e=>{
  render();
 };
 
-/* 로드 */
+/* 초기 로드 */
 getDocs(COL).then(s=>{
  items=s.docs.map(d=>d.data());
  if(items.length===0)
   items=[{id:1,name:"예시",x:50,y:50,desc:"설명"}];
  render();
- loadBG(); // ✅ 배경 불러오기
+ loadBG();
 });
 </script>
   
