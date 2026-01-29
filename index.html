@@ -6,13 +6,16 @@
 
 <link href="https://fonts.googleapis.com/css2?family=Nanum+Pen+Script&display=swap" rel="stylesheet">
 
+<!-- 캡처용 라이브러리 -->
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+
 <style>
 *{box-sizing:border-box;font-family:'Nanum Pen Script',sans-serif;}
 body{margin:0;background:#faf7f2;}
 
 .container{
   display:grid;
-  grid-template-columns:7fr 3fr;
+  grid-template-columns:8fr 2fr; /* ⭐ 8:2 */
   height:100vh;
 }
 
@@ -29,13 +32,9 @@ body{margin:0;background:#faf7f2;}
   border:2px solid #444;
   background:white;
   overflow:hidden;
-  touch-action:none;
 }
 
-#canvas{
-  width:100%;height:100%;
-  transform-origin:0 0;
-}
+#canvas{width:100%;height:100%;}
 
 .sketch-bg{
   position:absolute;inset:0;
@@ -75,7 +74,7 @@ body{margin:0;background:#faf7f2;}
   overflow-y:auto;
 }
 
-.top-bar{display:flex;gap:6px;margin-bottom:8px;}
+.top-bar{display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap;}
 button{font-size:18px;cursor:pointer;}
 .edit-on{background:#ff7675;color:white;}
 .search{flex:1;padding:6px;}
@@ -96,11 +95,6 @@ li{
 }
 
 .del-btn{float:right;cursor:pointer;}
-
-@media(max-width:768px){
-  .container{display:flex;flex-direction:column;}
-  .image-area{height:60vh;}
-}
 </style>
 </head>
 
@@ -108,7 +102,7 @@ li{
 
 <div id="modeBadge" class="mode-badge">✏️ 편집모드</div>
 
-<div class="container">
+<div class="container" id="captureRoot">
 
 <div class="image-area" id="imageArea">
   <div id="canvas">
@@ -118,11 +112,19 @@ li{
   </div>
 </div>
 
-<div class="info-area">
+<div class="info-area" id="listPanel">
   <div class="top-bar">
     <button id="editBtn">✏️</button>
     <button id="imgBtn">📷</button>
     <button id="clearImgBtn">❌</button>
+
+    <!-- ⭐ 내보내기 -->
+    <button id="exportBtn">💾</button>
+    <label>
+      <input type="checkbox" id="includeList" checked>
+      리스트 포함
+    </label>
+
     <input type="file" id="imgInput" hidden accept="image/*">
     <input id="searchBox" class="search" placeholder="검색">
   </div>
@@ -136,6 +138,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/12.8.0/firebas
 import { getFirestore, collection, getDocs, setDoc, doc, deleteDoc }
 from "https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore.js";
 
+/* Firebase */
 const app=initializeApp({
  apiKey:"AIzaSyBUL...",
  authDomain:"sound-control-room.firebaseapp.com",
@@ -163,9 +166,14 @@ editBtn.onclick=()=>{
  badge.style.display=editMode?"block":"none";
 };
 
-/* 이미지 업로드 */
-imgBtn.onclick=()=>imgInput.click();
+/* ⭐ 사진 = 편집모드에서만 */
+imgBtn.onclick=()=>{
+ if(!editMode) return;
+ imgInput.click();
+};
+
 imgInput.onchange=e=>{
+ if(!editMode) return;
  const f=e.target.files[0];
  if(!f)return;
  const r=new FileReader();
@@ -175,8 +183,8 @@ imgInput.onchange=e=>{
  r.readAsDataURL(f);
 };
 
-/* 이미지 제거 */
 clearImgBtn.onclick=()=>{
+ if(!editMode) return;
  canvas.style.background="";
 };
 
@@ -190,6 +198,7 @@ async function remove(id){
  render();
 }
 
+/* 편집 */
 function makeEditable(el,onSave){
  el.contentEditable=true;
  el.focus();
@@ -201,6 +210,7 @@ function makeEditable(el,onSave){
 
 function render(){renderHits();renderList();}
 
+/* 라벨 */
 function renderHits(){
  hitWrap.innerHTML="";
  items.forEach(it=>{
@@ -229,6 +239,7 @@ function renderHits(){
  });
 }
 
+/* 리스트 */
 function renderList(){
  listEl.innerHTML="";
  const q=searchBox.value.toLowerCase();
@@ -293,10 +304,9 @@ function select(it,openList){
  }
 }
 
-/* ⭐ 여기 추가됨 */
+/* 빈공간 클릭 해제 */
 imageArea.addEventListener("click",e=>{
- if(editMode) return;
-
+ if(editMode)return;
  if(!e.target.closest(".hit-area")){
   highlight.style.display="none";
   document.querySelectorAll(".detail")
@@ -304,6 +314,7 @@ imageArea.addEventListener("click",e=>{
  }
 });
 
+/* 추가 */
 imageArea.ondblclick=e=>{
  if(!editMode)return;
  const r=imageArea.getBoundingClientRect();
@@ -321,6 +332,26 @@ imageArea.ondblclick=e=>{
 
 searchBox.oninput=renderList;
 
+/* ⭐ 내보내기 */
+document.getElementById("exportBtn").onclick=async ()=>{
+ if(editMode){
+  alert("뷰어모드에서만 내보내기 가능");
+  return;
+ }
+
+ const include=document.getElementById("includeList").checked;
+ const target=include
+   ? document.getElementById("captureRoot")
+   : document.getElementById("imageArea");
+
+ const canvasCap=await html2canvas(target);
+ const link=document.createElement("a");
+ link.download="map.png";
+ link.href=canvasCap.toDataURL("image/png");
+ link.click();
+};
+
+/* 로드 */
 getDocs(COL).then(s=>{
  items=s.docs.map(d=>d.data());
  if(items.length===0)
