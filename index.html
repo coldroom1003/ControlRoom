@@ -86,81 +86,30 @@ button{margin:2px;padding:6px 12px;border-radius:8px;border:none;cursor:pointer;
 </div>
 
 <script>
-let myData=JSON.parse(localStorage.getItem("myData")||"[]");
-let tplData=[];
-let items=myData;
-
-let edit=false,selected=null,mode="my";
-
-const hits=document.getElementById("hits");
-const list=document.getElementById("list");
-const canvas=document.getElementById("canvas");
-const lines=document.getElementById("lines");
-const imageArea=document.getElementById("imageArea");
-
-function save(){localStorage.setItem("myData",JSON.stringify(myData));}
-
-/* 탭 */
-tabMy.onclick=()=>{mode="my";items=myData;render();}
-tabTpl.onclick=()=>{mode="tpl";items=tplData;render();}
-
-/* 편집 */
-editBtn.onclick=()=>{edit=!edit;editBtn.classList.toggle("edit-on",edit);}
-
-/* 배경 */
-bgBtn.onclick=()=>{if(edit)bgInput.click();}
-bgInput.onchange=e=>{
- const f=e.target.files[0];
- if(!f)return;
- const r=new FileReader();
- r.onload=()=>{canvas.style.backgroundImage=`url(${r.result})`;localStorage.setItem("bg",r.result);}
- r.readAsDataURL(f);
-};
-const bg=localStorage.getItem("bg");
-if(bg) canvas.style.backgroundImage=`url(${bg})`;
-
-/* 포커스 해제 */
-function clearFocus(){
- selected=null;
+/* 검색 */
+const search=document.getElementById("search");
+search.oninput=e=>{
+ searchText=e.target.value.toLowerCase();
  render();
-}
-
-/* 배경 클릭 */
-imageArea.addEventListener("pointerdown",e=>{
- if(e.target===imageArea||e.target===canvas){
-  clearFocus();
-  if(edit&&mode==="my"){
-   const r=imageArea.getBoundingClientRect();
-   myData.push({
-    id:Date.now(),
-    name:"항목",
-    desc:"설명",
-    x:(e.clientX-r.left)/r.width*100,
-    y:(e.clientY-r.top)/r.height*100,
-    lx:null,ly:null
-   });
-   save();render();
-  }
- }
-});
+};
 
 /* 드래그 */
-let dragItem=null,dragType=null;
-
 document.addEventListener("pointermove",e=>{
- if(!dragItem)return;
+ if(!dragItem) return;
+ if(!edit || mode!=="my") return; // 편집모드가 아니면 이동 금지
+
  const r=imageArea.getBoundingClientRect();
  const x=(e.clientX-r.left)/r.width*100;
  const y=(e.clientY-r.top)/r.height*100;
 
- if(dragType==="item"){
-  if(dragItem.lx!==null){dragItem.lx=x;dragItem.ly=y;}
-  else{dragItem.x=x;dragItem.y=y;}
+ if(dragType==="item"){ 
+  if(dragItem.lx!==null){dragItem.lx=x; dragItem.ly=y;} 
+  else{dragItem.x=x; dragItem.y=y;}
  }
- if(dragType==="start"){dragItem.x=x;dragItem.y=y;}
- if(dragType==="end"){dragItem.lx=x;dragItem.ly=y;}
+ if(dragType==="start"){dragItem.x=x; dragItem.y=y;}
+ if(dragType==="end"){dragItem.lx=x; dragItem.ly=y;}
 
- save();render();
+ save(); render();
 });
 document.addEventListener("pointerup",()=>dragItem=null);
 
@@ -170,7 +119,12 @@ function render(){
  lines.setAttribute("width",imageArea.clientWidth);
  lines.setAttribute("height",imageArea.clientHeight);
 
- items.forEach(it=>{
+ const filtered = items.filter(it=>
+  it.name.toLowerCase().includes(searchText) ||
+  it.desc.toLowerCase().includes(searchText)
+ );
+
+ filtered.forEach(it=>{
   const hx=it.lx??it.x;
   const hy=it.ly??it.y;
 
@@ -185,14 +139,16 @@ function render(){
    line.setAttribute("stroke-width","2");
    lines.appendChild(line);
 
-   ["start","end"].forEach(type=>{
-    const h=document.createElement("div");
-    h.className="handle";
-    h.style.left=(type==="start"?it.x:it.lx)+"%";
-    h.style.top=(type==="start"?it.y:it.ly)+"%";
-    h.onpointerdown=e=>{dragItem=it;dragType=type;e.stopPropagation();}
-    hits.appendChild(h);
-   });
+   if(edit && mode==="my"){ // 편집모드일 때만 핸들 보이고 이동 가능
+    ["start","end"].forEach(type=>{
+     const h=document.createElement("div");
+     h.className="handle";
+     h.style.left=(type==="start"?it.x:it.lx)+"%";
+     h.style.top=(type==="start"?it.y:it.ly)+"%";
+     h.onpointerdown=e=>{dragItem=it; dragType=type; e.stopPropagation();}
+     hits.appendChild(h);
+    });
+   }
   }
 
   /* 항목 */
@@ -202,90 +158,56 @@ function render(){
   d.style.top=hy+"%";
   d.textContent=it.name;
 
-  let pressTimer=null;
-  d.onpointerdown=e=>{
-   e.stopPropagation();
-   selected=it.id;
-   dragItem=it;dragType="item";
-
-   if(e.pointerType==="touch"){
-    pressTimer=setTimeout(()=>{
-     if(it.lx===null){it.lx=it.x+10;it.ly=it.y+10;}
-     else{it.lx=null;it.ly=null;}
-     save();render();
-    },500);
-   }
-  };
-  d.onpointerup=()=>clearTimeout(pressTimer);
-
-  d.ondblclick=()=>{
-   if(it.lx===null){it.lx=it.x+10;it.ly=it.y+10;}
-   else{it.lx=null;it.ly=null;}
-   save();render();
-  };
-
+  if(edit && mode==="my"){ // 편집모드일 때만 항목 이동 가능
+   let pressTimer=null;
+   d.onpointerdown=e=>{
+    e.stopPropagation();
+    selected=it.id;
+    dragItem=it;
+    dragType="item";
+   };
+   d.onpointerup=()=>clearTimeout(pressTimer);
+  }
   hits.appendChild(d);
 
   /* 리스트 */
   const li=document.createElement("li");
   if(it.id===selected) li.className="active";
 
+  const del=document.createElement("span");
+  del.textContent="✕";
+  del.className="del";
+  del.onclick=e=>{
+   e.stopPropagation();
+   if(edit && mode==="my"){
+    myData=myData.filter(x=>x.id!==it.id);
+    items=myData;
+    save();
+    render();
+   }
+  };
+  li.appendChild(del);
+
   const title=document.createElement("div");
   title.textContent=it.name;
   if(edit) title.contentEditable=true;
-  title.oninput=()=>{it.name=title.textContent;save();}
+  title.oninput=()=>{it.name=title.textContent; save();};
 
   const detail=document.createElement("div");
   detail.className="detail";
   detail.textContent=it.desc;
   if(edit) detail.contentEditable=true;
-  detail.oninput=()=>{it.desc=detail.textContent;save();}
+  detail.oninput=()=>{it.desc=detail.textContent; save();};
 
   if(it.id===selected) detail.style.display="block";
 
-  li.onclick=()=>{
-   selected=it.id;
-   render();
-  };
+  li.onclick=()=>{selected=it.id; render();};
 
   li.appendChild(title);
   li.appendChild(detail);
   list.appendChild(li);
  });
 }
-
-/* PNG */
-pngBtn.onclick=()=>{
- html2canvas(imageArea).then(c=>{
-  const a=document.createElement("a");
-  a.href=c.toDataURL();
-  a.download="map.png";
-  a.click();
- });
-};
-
-/* JSON */
-jsonOut.onclick=()=>{
- const blob=new Blob([JSON.stringify(myData)],{type:"application/json"});
- const a=document.createElement("a");
- a.href=URL.createObjectURL(blob);
- a.download="map.json";
- a.click();
-};
-
-jsonIn.onclick=()=>jsonFile.click();
-jsonFile.onchange=e=>{
- const f=e.target.files[0];
- const r=new FileReader();
- r.onload=()=>{
-  tplData=JSON.parse(r.result);
-  mode="tpl";items=tplData;
-  render();
- };
- r.readAsText(f);
-};
-
-render();
 </script>
 </body>
 </html>
