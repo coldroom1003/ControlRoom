@@ -3,58 +3,46 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 
 <style>
 body{margin:0;display:flex;height:100vh;font-family:sans-serif;background:#fdfefe;}
 #left{flex:8;display:flex;flex-direction:column}
-
 .tabs{display:flex;height:36px;background:#eef5fb;border-bottom:1px solid #d6e2ee;}
-.tab{flex:1;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:14px;color:#4a5a6a;}
+.tab{flex:1;display:flex;align-items:center;justify-content:center;cursor:pointer}
 .tab.active{background:white;font-weight:bold}
 
 #imageArea{flex:1;position:relative;background:#f7fafc;overflow:hidden;touch-action:none;}
 #canvas{width:100%;height:100%;background-size:contain;background-position:center;background-repeat:no-repeat;}
-
 #lines{position:absolute;inset:0;pointer-events:none;}
 
 .hit{
- position:absolute;
- transform:translate(-50%,-50%);
- background:#fffef9;
- border:1px solid #c9d6e2;
- padding:5px 9px;
- border-radius:10px;
- cursor:pointer;
- color:#3c4b5a;
+ position:absolute;transform:translate(-50%,-50%);
+ background:#fffef9;border:1px solid #c9d6e2;
+ padding:5px 9px;border-radius:10px;cursor:pointer;
 }
 .hit.transparent{background:transparent;border-style:dashed;}
 .hit.active{background:#e8f4ff}
 
 .handle{
- position:absolute;
- width:8px;height:8px;
- border-radius:50%;
- background:white;
+ position:absolute;width:8px;height:8px;
+ border-radius:50%;background:white;
  border:2px solid #4a90e2;
  transform:translate(-50%,-50%);
  cursor:pointer;
 }
 
-#side{flex:2;border-left:1px solid #d6e2ee;display:flex;flex-direction:column;background:#f9fcff;}
-#search{padding:8px;border:none;border-bottom:1px solid #dde7f0;outline:none;}
-
+#side{flex:2;border-left:1px solid #d6e2ee;display:flex;flex-direction:column}
+#search{padding:8px;border:none;border-bottom:1px solid #ddd;outline:none}
 ul{list-style:none;margin:0;padding:0;flex:1;overflow:auto}
-li{padding:8px;border-bottom:1px solid #eef2f6;cursor:pointer}
+li{padding:8px;border-bottom:1px solid #eee;cursor:pointer}
 li.active{background:#eaf4ff}
-
-.detail{font-size:13px;color:#6a7a8a;display:none;margin-top:4px;}
+.detail{font-size:13px;color:#666;display:none;margin-top:4px}
 .del{float:right;cursor:pointer}
 
 #bar{position:fixed;bottom:10px;left:10px;background:white;padding:8px;border-radius:12px;box-shadow:0 2px 6px rgba(0,0,0,.12);}
-button{margin:2px;background:linear-gradient(145deg,#d7ecff,#b8dbff);border:none;padding:6px 12px;border-radius:8px;cursor:pointer;}
-.edit-on{background:linear-gradient(145deg,#a8d8ff,#7fc3ff);}
+button{margin:2px;padding:6px 12px;border-radius:8px;cursor:pointer;border:none;background:#d7ecff;}
+.edit-on{background:#a8d8ff;}
 </style>
 </head>
 
@@ -92,66 +80,141 @@ button{margin:2px;background:linear-gradient(145deg,#d7ecff,#b8dbff);border:none
 
 <script>
 let myData=JSON.parse(localStorage.getItem("myData")||"[]");
-let tplData=[];let items=myData;
+let tplData=[];
+let items=myData;
 
 let edit=false,selected=null,mode="my",searchText="";
+
 const hits=document.getElementById("hits");
 const list=document.getElementById("list");
 const canvas=document.getElementById("canvas");
 const imageArea=document.getElementById("imageArea");
 const lines=document.getElementById("lines");
+const search=document.getElementById("search");
+
+const editBtn=document.getElementById("editBtn");
+const bgBtn=document.getElementById("bgBtn");
+const pngBtn=document.getElementById("pngBtn");
+const jsonOut=document.getElementById("jsonOut");
+const jsonIn=document.getElementById("jsonIn");
 const transChk=document.getElementById("transChk");
 
-function save(){localStorage.setItem("myData",JSON.stringify(myData));}
-function remove(id){myData=myData.filter(x=>x.id!==id);items=myData;save();render();}
+const bgInput=document.getElementById("bgInput");
+const jsonFile=document.getElementById("jsonFile");
 
-/* ===== 항목 즉시 생성 ===== */
+/* ===== 탭 ===== */
+tabMy.onclick=()=>{mode="my";items=myData;tabMy.classList.add("active");tabTpl.classList.remove("active");render();}
+tabTpl.onclick=()=>{mode="tpl";items=tplData;tabTpl.classList.add("active");tabMy.classList.remove("active");render();}
+
+/* ===== 편집 버튼 ===== */
+editBtn.onclick=()=>{edit=!edit;editBtn.classList.toggle("edit-on",edit);}
+
+/* ===== 검색 ===== */
+search.oninput=e=>{searchText=e.target.value.toLowerCase();render();}
+
+/* ===== 배경 ===== */
+bgBtn.onclick=()=>{if(edit)bgInput.click();}
+bgInput.onchange=e=>{
+ const f=e.target.files[0];
+ const r=new FileReader();
+ r.onload=()=>{
+  canvas.style.backgroundImage=`url(${r.result})`;
+  localStorage.setItem("bg",r.result);
+ };
+ r.readAsDataURL(f);
+};
+const bg=localStorage.getItem("bg");
+if(bg)canvas.style.backgroundImage=`url(${bg})`;
+
+/* ===== 저장 ===== */
+function save(){localStorage.setItem("myData",JSON.stringify(myData));}
+
+/* ===== 아이패드 즉시 생성 ===== */
 imageArea.onpointerdown=e=>{
  if(!edit||mode!=="my")return;
  if(e.target.classList.contains("hit")||e.target.classList.contains("handle"))return;
 
  const r=imageArea.getBoundingClientRect();
  myData.push({
-  id:Date.now(),
-  name:"항목",
-  desc:"설명",
+  id:Date.now(),name:"항목",desc:"설명",
   x:(e.clientX-r.left)/r.width*100,
   y:(e.clientY-r.top)/r.height*100,
-  lx:null,ly:null,
-  transparent:false
+  lx:null,ly:null,transparent:false
  });
  save();render();
 };
 
 /* ===== 드래그 ===== */
 let dragItem=null,dragType=null;
+
 document.addEventListener("pointermove",e=>{
  if(!dragItem)return;
  const r=imageArea.getBoundingClientRect();
  const x=(e.clientX-r.left)/r.width*100;
  const y=(e.clientY-r.top)/r.height*100;
 
- if(dragType==="item"){
-  if(dragItem.lx!==null){dragItem.lx=x;dragItem.ly=y;}
-  else{dragItem.x=x;dragItem.y=y;}
- }
+ if(dragType==="item"){dragItem.x=x;dragItem.y=y;}
  if(dragType==="end"){dragItem.lx=x;dragItem.ly=y;}
+
  save();render();
 });
 document.addEventListener("pointerup",()=>dragItem=null);
 
+/* ===== 투명 ===== */
+transChk.onchange=()=>{
+ if(!selected)return;
+ const it=myData.find(i=>i.id===selected);
+ if(!it)return;
+ it.transparent=transChk.checked;
+ save();render();
+};
+
+/* ===== PNG ===== */
+pngBtn.onclick=()=>{
+ html2canvas(imageArea).then(c=>{
+  const a=document.createElement("a");
+  a.href=c.toDataURL();
+  a.download="map.png";
+  a.click();
+ });
+};
+
+/* ===== JSON ===== */
+jsonOut.onclick=()=>{
+ const blob=new Blob([JSON.stringify(myData)],{type:"application/json"});
+ const a=document.createElement("a");
+ a.href=URL.createObjectURL(blob);
+ a.download="map.json";
+ a.click();
+};
+
+jsonIn.onclick=()=>jsonFile.click();
+jsonFile.onchange=e=>{
+ const f=e.target.files[0];
+ const r=new FileReader();
+ r.onload=()=>{
+  tplData=JSON.parse(r.result);
+  mode="tpl";items=tplData;
+  tabTpl.classList.add("active");
+  tabMy.classList.remove("active");
+  render();
+ };
+ r.readAsText(f);
+};
+
 /* ===== 렌더 ===== */
 function render(){
  hits.innerHTML="";list.innerHTML="";lines.innerHTML="";
- lines.setAttribute("width",imageArea.clientWidth);
- lines.setAttribute("height",imageArea.clientHeight);
 
- items.forEach(it=>{
-  const hx=it.lx??it.x;
-  const hy=it.ly??it.y;
+ const filtered=items.filter(it=>
+  it.name.toLowerCase().includes(searchText)||
+  it.desc.toLowerCase().includes(searchText)
+ );
 
-  /* 선 */
-  if(it.lx!==null){
+ filtered.forEach(it=>{
+  const hx=it.lx??it.x, hy=it.ly??it.y;
+
+  if(it.lx!=null){
    const line=document.createElementNS("http://www.w3.org/2000/svg","line");
    line.setAttribute("x1",it.x/100*imageArea.clientWidth);
    line.setAttribute("y1",it.y/100*imageArea.clientHeight);
@@ -161,7 +224,6 @@ function render(){
    line.setAttribute("stroke-width","2");
    lines.appendChild(line);
 
-   /* 끝 핸들만 */
    const he=document.createElement("div");
    he.className="handle";
    he.style.left=it.lx+"%";
@@ -175,27 +237,22 @@ function render(){
   d.style.left=hx+"%";d.style.top=hy+"%";
   d.textContent=it.name;
 
-  /* 꾹누르기 화살표 */
-  let hold;
   d.onpointerdown=e=>{
-   if(edit){
-    hold=setTimeout(()=>{
-     if(it.lx==null){it.lx=it.x+10;it.ly=it.y+10;}
-     else{it.lx=null;it.ly=null;}
-     save();render();
-    },500);
-    dragItem=it;dragType="item";
-   }
+   if(edit&&mode==="my"){dragItem=it;dragType="item";}
   };
-  d.onpointerup=()=>clearTimeout(hold);
 
   d.onclick=e=>{
-   e.stopPropagation();
    selected=it.id;
    transChk.checked=!!it.transparent;
+   e.stopPropagation();
   };
 
   hits.appendChild(d);
+
+  const li=document.createElement("li");
+  if(it.id===selected)li.className="active";
+  li.textContent=it.name;
+  list.appendChild(li);
  });
 }
 
