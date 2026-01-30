@@ -27,6 +27,7 @@ body{margin:0;display:flex;height:100vh;font-family:sans-serif;background:#fdfef
  border-radius:10px;
  cursor:pointer;
 }
+.hit.active{background:#e8f4ff;}
 
 .handle{
  position:absolute;
@@ -44,6 +45,8 @@ body{margin:0;display:flex;height:100vh;font-family:sans-serif;background:#fdfef
 ul{list-style:none;margin:0;padding:0;flex:1;overflow:auto}
 li{padding:8px;border-bottom:1px solid #eef2f6;cursor:pointer}
 li.active{background:#eaf4ff}
+
+.detail{display:none;font-size:13px;color:#666;margin-top:4px}
 
 #bar{position:fixed;bottom:10px;left:10px;background:white;padding:8px;border-radius:12px;box-shadow:0 2px 6px rgba(0,0,0,.12);}
 button{margin:2px;padding:6px 12px;border-radius:8px;border:none;cursor:pointer;}
@@ -95,9 +98,11 @@ const canvas=document.getElementById("canvas");
 const lines=document.getElementById("lines");
 const imageArea=document.getElementById("imageArea");
 
+function save(){localStorage.setItem("myData",JSON.stringify(myData));}
+
 /* 탭 */
-tabMy.onclick=()=>{mode="my";items=myData;tabMy.classList.add("active");tabTpl.classList.remove("active");render();}
-tabTpl.onclick=()=>{mode="tpl";items=tplData;tabTpl.classList.add("active");tabMy.classList.remove("active");render();}
+tabMy.onclick=()=>{mode="my";items=myData;render();}
+tabTpl.onclick=()=>{mode="tpl";items=tplData;render();}
 
 /* 편집 */
 editBtn.onclick=()=>{edit=!edit;editBtn.classList.toggle("edit-on",edit);}
@@ -108,34 +113,36 @@ bgInput.onchange=e=>{
  const f=e.target.files[0];
  if(!f)return;
  const r=new FileReader();
- r.onload=()=>{
-  canvas.style.backgroundImage=`url(${r.result})`;
-  localStorage.setItem("bg",r.result);
- };
+ r.onload=()=>{canvas.style.backgroundImage=`url(${r.result})`;localStorage.setItem("bg",r.result);}
  r.readAsDataURL(f);
 };
-const savedBg=localStorage.getItem("bg");
-if(savedBg) canvas.style.backgroundImage=`url(${savedBg})`;
+const bg=localStorage.getItem("bg");
+if(bg) canvas.style.backgroundImage=`url(${bg})`;
 
-/* 저장 */
-function save(){localStorage.setItem("myData",JSON.stringify(myData));}
+/* 포커스 해제 */
+function clearFocus(){
+ selected=null;
+ render();
+}
 
-/* 항목 추가 */
-imageArea.onpointerdown=e=>{
- if(!edit||mode!=="my")return;
- if(e.target.classList.contains("hit")||e.target.classList.contains("handle"))return;
-
- const r=imageArea.getBoundingClientRect();
- myData.push({
-  id:Date.now(),
-  name:"항목",
-  desc:"설명",
-  x:(e.clientX-r.left)/r.width*100,
-  y:(e.clientY-r.top)/r.height*100,
-  lx:null,ly:null
- });
- save();render();
-};
+/* 배경 클릭 */
+imageArea.addEventListener("pointerdown",e=>{
+ if(e.target===imageArea||e.target===canvas){
+  clearFocus();
+  if(edit&&mode==="my"){
+   const r=imageArea.getBoundingClientRect();
+   myData.push({
+    id:Date.now(),
+    name:"항목",
+    desc:"설명",
+    x:(e.clientX-r.left)/r.width*100,
+    y:(e.clientY-r.top)/r.height*100,
+    lx:null,ly:null
+   });
+   save();render();
+  }
+ }
+});
 
 /* 드래그 */
 let dragItem=null,dragType=null;
@@ -146,7 +153,10 @@ document.addEventListener("pointermove",e=>{
  const x=(e.clientX-r.left)/r.width*100;
  const y=(e.clientY-r.top)/r.height*100;
 
- if(dragType==="item"){dragItem.x=x;dragItem.y=y;}
+ if(dragType==="item"){
+  if(dragItem.lx!==null){dragItem.lx=x;dragItem.ly=y;}
+  else{dragItem.x=x;dragItem.y=y;}
+ }
  if(dragType==="start"){dragItem.x=x;dragItem.y=y;}
  if(dragType==="end"){dragItem.lx=x;dragItem.ly=y;}
 
@@ -156,9 +166,7 @@ document.addEventListener("pointerup",()=>dragItem=null);
 
 /* 렌더 */
 function render(){
- hits.innerHTML="";
- list.innerHTML="";
- lines.innerHTML="";
+ hits.innerHTML=""; list.innerHTML=""; lines.innerHTML="";
  lines.setAttribute("width",imageArea.clientWidth);
  lines.setAttribute("height",imageArea.clientHeight);
 
@@ -177,7 +185,6 @@ function render(){
    line.setAttribute("stroke-width","2");
    lines.appendChild(line);
 
-   /* 핸들 */
    ["start","end"].forEach(type=>{
     const h=document.createElement("div");
     h.className="handle";
@@ -190,14 +197,15 @@ function render(){
 
   /* 항목 */
   const d=document.createElement("div");
-  d.className="hit";
+  d.className="hit"+(it.id===selected?" active":"");
   d.style.left=hx+"%";
   d.style.top=hy+"%";
   d.textContent=it.name;
 
   let pressTimer=null;
   d.onpointerdown=e=>{
-   if(!edit||mode!=="my")return;
+   e.stopPropagation();
+   selected=it.id;
    dragItem=it;dragType="item";
 
    if(e.pointerType==="touch"){
@@ -210,7 +218,6 @@ function render(){
   };
   d.onpointerup=()=>clearTimeout(pressTimer);
 
-  /* PC 더블클릭 */
   d.ondblclick=()=>{
    if(it.lx===null){it.lx=it.x+10;it.ly=it.y+10;}
    else{it.lx=null;it.ly=null;}
@@ -221,8 +228,28 @@ function render(){
 
   /* 리스트 */
   const li=document.createElement("li");
-  li.textContent=it.name;
-  li.onclick=()=>{selected=it.id;}
+  if(it.id===selected) li.className="active";
+
+  const title=document.createElement("div");
+  title.textContent=it.name;
+  if(edit) title.contentEditable=true;
+  title.oninput=()=>{it.name=title.textContent;save();}
+
+  const detail=document.createElement("div");
+  detail.className="detail";
+  detail.textContent=it.desc;
+  if(edit) detail.contentEditable=true;
+  detail.oninput=()=>{it.desc=detail.textContent;save();}
+
+  if(it.id===selected) detail.style.display="block";
+
+  li.onclick=()=>{
+   selected=it.id;
+   render();
+  };
+
+  li.appendChild(title);
+  li.appendChild(detail);
   list.appendChild(li);
  });
 }
@@ -253,8 +280,6 @@ jsonFile.onchange=e=>{
  r.onload=()=>{
   tplData=JSON.parse(r.result);
   mode="tpl";items=tplData;
-  tabTpl.classList.add("active");
-  tabMy.classList.remove("active");
   render();
  };
  r.readAsText(f);
