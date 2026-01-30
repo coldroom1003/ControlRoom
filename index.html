@@ -14,41 +14,28 @@ body{margin:0;font-family:sans-serif;display:flex;height:100vh;overflow:hidden}
  background-position:center;
  background-repeat:no-repeat;
 }
-
 #hitWrap{position:absolute;inset:0}
-
-/* 🎨 마커 스타일 개선 */
-.hit-title{
- background:#fffdf5;
- border:1px solid rgba(0,0,0,.3);
- border-radius:14px 10px 16px 12px;
- padding:5px 10px;
- box-shadow:1px 1px 2px rgba(0,0,0,.15);
- position:relative;
-}
-
-/* ✨ 형광펜 효과 */
-.hit-title.focused::after{
- content:"";
- position:absolute;
- left:-5%;
- bottom:2px;
- width:0%;
- height:8px;
- background:rgba(255,255,0,.6);
- z-index:-1;
- animation:highlight 1s forwards;
-}
-
-@keyframes highlight{
- from{width:0%}
- to{width:110%}
-}
 
 .hit-area{
  position:absolute;
  transform:translate(-50%,-50%);
  cursor:pointer;
+}
+
+.hit-title{
+ background:#fffdf5;
+ border:1px solid rgba(0,0,0,.3);
+ border-radius:12px;
+ padding:5px 10px;
+}
+
+/* 형광펜 효과 */
+.hit-title.focused{
+ background:linear-gradient(
+  to top,
+  rgba(255,255,0,.6) 40%,
+  transparent 40%
+ );
 }
 
 #side{
@@ -58,17 +45,8 @@ body{margin:0;font-family:sans-serif;display:flex;height:100vh;overflow:hidden}
  flex-direction:column;
 }
 
-#tabs{
- display:flex;
- border-bottom:1px solid #ccc;
-}
-.tab{
- flex:1;
- padding:8px;
- text-align:center;
- cursor:pointer;
- background:#f5f5f5;
-}
+#tabs{display:flex;border-bottom:1px solid #ccc}
+.tab{flex:1;padding:8px;text-align:center;cursor:pointer;background:#f5f5f5}
 .tab.active{background:#fff;font-weight:bold}
 
 ul{list-style:none;margin:0;padding:0;overflow:auto;flex:1}
@@ -81,9 +59,12 @@ li.active{background:#f0f0f0}
  position:fixed;
  bottom:10px;
  left:10px;
+ background:#fff;
+ padding:5px;
+ border-radius:8px;
+ box-shadow:0 2px 6px rgba(0,0,0,.2);
 }
-
-button{padding:6px 10px;margin:2px}
+button{margin:2px}
 .edit-on{background:#4caf50;color:#fff}
 </style>
 </head>
@@ -91,63 +72,75 @@ button{padding:6px 10px;margin:2px}
 <body>
 
 <div id="imageArea">
-<div id="canvas"></div>
-<div id="hitWrap"></div>
+ <div id="canvas"></div>
+ <div id="hitWrap"></div>
 </div>
 
 <div id="side">
-
-<div id="tabs">
-<div class="tab active" id="tabWork">내 작업</div>
-<div class="tab" id="tabTemplates">템플릿</div>
-</div>
-
-<ul id="list"></ul>
+ <div id="tabs">
+  <div class="tab active" id="tabWork">내 작업</div>
+  <div class="tab" id="tabTemplates">템플릿</div>
+ </div>
+ <ul id="list"></ul>
 </div>
 
 <div id="topbar">
-<button id="editBtn">편집</button>
-<button id="imgBtn">배경</button>
-<button id="pngBtn">PNG</button>
-<button id="exportBtn">JSON</button>
-<button id="importBtn">불러오기</button>
+ <button id="editBtn">편집</button>
+ <button id="imgBtn">배경</button>
+ <button id="pngBtn">PNG</button>
+ <button id="exportBtn">JSON</button>
+ <button id="importBtn">불러오기</button>
 
-<input type="file" id="imgInput" hidden accept="image/*">
-<input type="file" id="jsonInput" hidden accept=".json">
+ <input type="file" id="imgInput" hidden accept="image/*">
+ <input type="file" id="jsonInput" hidden accept=".json">
 </div>
 
 <script>
-let items=[];
-let templates=[];
+/* ===== 요소 가져오기 ===== */
+const imageArea=document.getElementById("imageArea");
+const canvas=document.getElementById("canvas");
+const hitWrap=document.getElementById("hitWrap");
+const list=document.getElementById("list");
+
+const editBtn=document.getElementById("editBtn");
+const imgBtn=document.getElementById("imgBtn");
+const pngBtn=document.getElementById("pngBtn");
+const exportBtn=document.getElementById("exportBtn");
+const importBtn=document.getElementById("importBtn");
+
+const imgInput=document.getElementById("imgInput");
+const jsonInput=document.getElementById("jsonInput");
+
+const tabWork=document.getElementById("tabWork");
+const tabTemplates=document.getElementById("tabTemplates");
+
+/* ===== 상태 ===== */
+let items=JSON.parse(localStorage.getItem("mapData")||"[]");
+let templates=JSON.parse(localStorage.getItem("templates")||"[]");
+
 let editMode=false;
 let selectedId=null;
 let currentTab="work";
 
-const canvas=canvas=document.getElementById("canvas");
-const hitWrap=document.getElementById("hitWrap");
-const list=document.getElementById("list");
-
-/* 저장 */
+/* ===== 저장 ===== */
 function save(){
  localStorage.setItem("mapData",JSON.stringify(items));
  localStorage.setItem("templates",JSON.stringify(templates));
 }
-function load(){
- items=JSON.parse(localStorage.getItem("mapData")||"[]");
- templates=JSON.parse(localStorage.getItem("templates")||"[]");
-}
-load();
 
-/* 편집 */
+/* ===== 편집 모드 ===== */
 editBtn.onclick=()=>{
  editMode=!editMode;
  editBtn.classList.toggle("edit-on",editMode);
 };
 
-/* 배경 */
-imgBtn.onclick=()=>editMode&&imgInput.click();
+/* ===== 배경 업로드 ===== */
+imgBtn.onclick=()=>{ if(editMode) imgInput.click(); };
+
 imgInput.onchange=e=>{
  const f=e.target.files[0];
+ if(!f) return;
+
  const r=new FileReader();
  r.onload=()=>{
   canvas.style.backgroundImage=`url(${r.result})`;
@@ -155,16 +148,18 @@ imgInput.onchange=e=>{
  };
  r.readAsDataURL(f);
 };
-const bg=localStorage.getItem("bgImg");
-if(bg)canvas.style.backgroundImage=`url(${bg})`;
 
-/* 탭 */
+const bg=localStorage.getItem("bgImg");
+if(bg) canvas.style.backgroundImage=`url(${bg})`;
+
+/* ===== 탭 ===== */
 tabWork.onclick=()=>{
  currentTab="work";
  tabWork.classList.add("active");
  tabTemplates.classList.remove("active");
  render();
 };
+
 tabTemplates.onclick=()=>{
  currentTab="templates";
  tabTemplates.classList.add("active");
@@ -172,25 +167,24 @@ tabTemplates.onclick=()=>{
  render();
 };
 
-/* 선택 */
+/* ===== 선택 ===== */
 function select(it){
  selectedId=it.id;
  render();
 }
 
-/* 렌더 */
+/* ===== 렌더 ===== */
 function render(){
  hitWrap.innerHTML="";
  list.innerHTML="";
 
  if(currentTab==="templates"){
-  templates.forEach((t,i)=>{
+  templates.forEach(t=>{
    const li=document.createElement("li");
-   li.innerText="📂 "+t.name;
+   li.textContent="📂 "+t.name;
    li.onclick=()=>{
     items=t.data;
     save();
-    currentTab="work";
     tabWork.onclick();
    };
    list.appendChild(li);
@@ -199,28 +193,29 @@ function render(){
  }
 
  items.forEach(it=>{
-  /* 마커 */
   const d=document.createElement("div");
   d.className="hit-area";
   d.style.left=it.x+"%";
   d.style.top=it.y+"%";
 
   const t=document.createElement("div");
-  t.className="hit-title";
-  if(it.id===selectedId)t.classList.add("focused");
-  t.innerText=it.name;
+  t.className="hit-title"+(it.id===selectedId?" focused":"");
+  t.textContent=it.name;
 
   t.onclick=e=>{
    e.stopPropagation();
+
    if(editMode){
     t.contentEditable=true;
     t.focus();
     t.onblur=()=>{
      t.contentEditable=false;
-     it.name=t.innerText;
-     save();render();
+     it.name=t.textContent;
+     save();
     };
-   }else select(it);
+   }else{
+    select(it);
+   }
   };
 
   d.appendChild(t);
@@ -233,30 +228,32 @@ function render(){
 
   const det=document.createElement("div");
   det.className="detail";
-  det.innerText=it.desc;
-  if(it.id===selectedId)det.style.display="block";
+  det.textContent=it.desc||"";
+  if(it.id===selectedId) det.style.display="block";
 
   det.onclick=e=>{
    e.stopPropagation();
-   if(!editMode)return;
+   if(!editMode) return;
    det.contentEditable=true;
    det.focus();
    det.onblur=()=>{
     det.contentEditable=false;
-    it.desc=det.innerText;
+    it.desc=det.textContent;
     save();
    };
   };
 
   li.onclick=()=>select(it);
+
   li.appendChild(det);
   list.appendChild(li);
  });
 }
 
-/* 추가 */
+/* ===== 더블클릭 추가 ===== */
 imageArea.ondblclick=e=>{
- if(!editMode)return;
+ if(!editMode) return;
+
  const r=imageArea.getBoundingClientRect();
  items.push({
   id:Date.now(),
@@ -265,16 +262,18 @@ imageArea.ondblclick=e=>{
   x:(e.clientX-r.left)/r.width*100,
   y:(e.clientY-r.top)/r.height*100
  });
- save();render();
+
+ save();
+ render();
 };
 
-/* PNG 내보내기 */
+/* ===== PNG ===== */
 pngBtn.onclick=()=>{
- const bgSrc=localStorage.getItem("bgImg");
- if(!bgSrc)return;
+ const bg=localStorage.getItem("bgImg");
+ if(!bg) return;
 
  const img=new Image();
- img.src=bgSrc;
+ img.src=bg;
 
  img.onload=()=>{
   const c=document.createElement("canvas");
@@ -289,31 +288,24 @@ pngBtn.onclick=()=>{
    const y=it.y/100*c.height;
 
    ctx.fillStyle="#fffdf5";
-   ctx.strokeStyle="rgba(0,0,0,.4)";
-   ctx.lineWidth=2;
+   ctx.fillRect(x-40,y-15,80,30);
 
-   ctx.beginPath();
-   ctx.roundRect(x-50,y-18,100,36,12);
-   ctx.fill();
-   ctx.stroke();
+   ctx.strokeRect(x-40,y-15,80,30);
 
    ctx.fillStyle="#000";
-   ctx.fillText(it.name,x-40,y+5);
+   ctx.fillText(it.name,x-35,y+5);
   });
 
   const a=document.createElement("a");
-  a.href=c.toDataURL("image/png");
+  a.href=c.toDataURL();
   a.download="map.png";
   a.click();
  };
 };
 
-/* JSON */
+/* ===== JSON ===== */
 exportBtn.onclick=()=>{
- const data={
-  name:"템플릿 "+new Date().toLocaleString(),
-  data:items
- };
+ const data={name:"템플릿",data:items};
  const blob=new Blob([JSON.stringify(data)],{type:"application/json"});
  const a=document.createElement("a");
  a.href=URL.createObjectURL(blob);
@@ -325,18 +317,19 @@ importBtn.onclick=()=>jsonInput.click();
 
 jsonInput.onchange=e=>{
  const f=e.target.files[0];
+ if(!f) return;
+
  const r=new FileReader();
  r.onload=()=>{
   const d=JSON.parse(r.result);
   templates.push(d);
   save();
-  alert("템플릿 저장됨!");
+  alert("템플릿 저장됨");
  };
  r.readAsText(f);
 };
 
 render();
 </script>
-
 </body>
 </html>
