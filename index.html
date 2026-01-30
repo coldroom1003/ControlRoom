@@ -9,14 +9,27 @@
 <style>
 body{margin:0;display:flex;height:100vh;font-family:sans-serif}
 
-/* 그림 */
-#imageArea{
+/* ===== 그림영역 ===== */
+#left{
  flex:8;
+ display:flex;
+ flex-direction:column;
+}
+
+.tab{
+ background:#f4d03f;
+ padding:8px 14px;
+ border-bottom:2px solid #999;
+ font-weight:bold;
+}
+
+#imageArea{
+ flex:1;
  position:relative;
  background:#eee;
  border:4px solid #999;
 }
-#imageArea.template{border-color:#4a90e2;}
+#imageArea.template{border-color:#4a90e2}
 
 #canvas{
  width:100%;height:100%;
@@ -47,7 +60,7 @@ body{margin:0;display:flex;height:100vh;font-family:sans-serif}
  );
 }
 
-/* 사이드 */
+/* ===== 리스트 ===== */
 #side{
  flex:2;
  border-left:1px solid #ccc;
@@ -67,6 +80,7 @@ li.active{background:#f0f0f0}
 
 .detail{display:none;font-size:13px;color:#555}
 
+/* ===== 버튼바 ===== */
 #topbar{
  position:fixed;
  bottom:10px;
@@ -83,20 +97,26 @@ button{margin:2px}
 
 <body>
 
-<div id="imageArea">
- <div id="canvas"></div>
- <div id="hitWrap"></div>
+<div id="left">
+ <div class="tab" id="tabTitle">📁 내 작업</div>
+ <div id="imageArea">
+  <div id="canvas"></div>
+  <div id="hitWrap"></div>
+ </div>
 </div>
 
 <div id="side">
- <div id="status">📁 내 작업</div>
+ <div id="status">내 작업 상태</div>
  <ul id="list"></ul>
 </div>
 
 <div id="topbar">
  <button id="editBtn">편집</button>
  <button id="imgBtn">배경</button>
+
  <button id="pngBtn">PNG</button>
+ <button id="jsonBtn">JSON</button>
+
  <button id="saveTplBtn">템플릿저장</button>
  <button id="loadTplBtn">템플릿불러오기</button>
  <button id="copyBtn">내작업복사</button>
@@ -106,16 +126,18 @@ button{margin:2px}
 </div>
 
 <script>
-/* 요소 */
+/* ===== 요소 ===== */
 const imageArea=document.getElementById("imageArea");
 const canvas=document.getElementById("canvas");
 const hitWrap=document.getElementById("hitWrap");
 const list=document.getElementById("list");
 const statusBar=document.getElementById("status");
+const tabTitle=document.getElementById("tabTitle");
 
 const editBtn=document.getElementById("editBtn");
 const imgBtn=document.getElementById("imgBtn");
 const pngBtn=document.getElementById("pngBtn");
+const jsonBtn=document.getElementById("jsonBtn");
 const saveTplBtn=document.getElementById("saveTplBtn");
 const loadTplBtn=document.getElementById("loadTplBtn");
 const copyBtn=document.getElementById("copyBtn");
@@ -123,7 +145,7 @@ const copyBtn=document.getElementById("copyBtn");
 const imgInput=document.getElementById("imgInput");
 const jsonInput=document.getElementById("jsonInput");
 
-/* 데이터 */
+/* ===== 데이터 ===== */
 let myItems=JSON.parse(localStorage.getItem("mapData")||"[]");
 let templates=JSON.parse(localStorage.getItem("templates")||"[]");
 
@@ -132,24 +154,24 @@ let editMode=false;
 let selected=null;
 let viewingTemplate=false;
 
-/* 저장 */
+/* ===== 저장 ===== */
 function save(){
  localStorage.setItem("mapData",JSON.stringify(myItems));
  localStorage.setItem("templates",JSON.stringify(templates));
 }
 
-/* 편집모드 */
+/* ===== 편집모드 ===== */
 editBtn.onclick=()=>{
  editMode=!editMode;
  editBtn.classList.toggle("edit-on",editMode);
 };
 
-/* 배경 */
+/* ===== 배경 ===== */
 imgBtn.onclick=()=>{ if(editMode) imgInput.click(); };
 
 imgInput.onchange=e=>{
  const f=e.target.files[0];
- if(!f) return;
+ if(!f)return;
  const r=new FileReader();
  r.onload=()=>{
   canvas.style.backgroundImage=`url(${r.result})`;
@@ -157,12 +179,13 @@ imgInput.onchange=e=>{
  };
  r.readAsDataURL(f);
 };
+
 const bg=localStorage.getItem("bg");
 if(bg) canvas.style.backgroundImage=`url(${bg})`;
 
-/* 추가 */
+/* ===== 아이템 추가 ===== */
 imageArea.ondblclick=e=>{
- if(!editMode||viewingTemplate) return;
+ if(!editMode||viewingTemplate)return;
 
  const r=imageArea.getBoundingClientRect();
  items.push({
@@ -172,24 +195,24 @@ imageArea.ondblclick=e=>{
   x:(e.clientX-r.left)/r.width*100,
   y:(e.clientY-r.top)/r.height*100
  });
+
  myItems=items;
  save();
  render();
 };
 
-/* 선택 */
+/* ===== 선택 ===== */
 function select(it){
  selected=it.id;
  render();
 }
 
-/* 렌더 */
+/* ===== 렌더 ===== */
 function render(){
  hitWrap.innerHTML="";
  list.innerHTML="";
 
  items.forEach(it=>{
-  /* 그림 라벨 */
   const d=document.createElement("div");
   d.className="hit-area";
   d.style.left=it.x+"%";
@@ -215,7 +238,6 @@ function render(){
   d.appendChild(t);
   hitWrap.appendChild(d);
 
-  /* 리스트 */
   const li=document.createElement("li");
   if(it.id===selected) li.className="active";
 
@@ -229,7 +251,7 @@ function render(){
 
   det.onclick=e=>{
    e.stopPropagation();
-   if(!editMode) return;
+   if(!editMode)return;
    det.contentEditable=true;
    det.focus();
    det.onblur=()=>{
@@ -247,7 +269,7 @@ function render(){
  });
 }
 
-/* PNG */
+/* ===== PNG ===== */
 pngBtn.onclick=()=>{
  html2canvas(imageArea).then(c=>{
   const a=document.createElement("a");
@@ -257,47 +279,66 @@ pngBtn.onclick=()=>{
  });
 };
 
-/* 템플릿 저장 */
+/* ===== JSON 내보내기 (복구!) ===== */
+jsonBtn.onclick=()=>{
+ const data={
+  name:"export",
+  data:items
+ };
+ const blob=new Blob([JSON.stringify(data)],{type:"application/json"});
+ const a=document.createElement("a");
+ a.href=URL.createObjectURL(blob);
+ a.download="template.json";
+ a.click();
+};
+
+/* ===== 템플릿 저장 ===== */
 saveTplBtn.onclick=()=>{
  const name=prompt("템플릿 이름?");
- if(!name) return;
+ if(!name)return;
  templates.push({name,data:myItems});
  save();
  alert("저장됨");
 };
 
-/* 템플릿 불러오기 */
+/* ===== 템플릿 불러오기 ===== */
 loadTplBtn.onclick=()=>jsonInput.click();
 
 jsonInput.onchange=e=>{
  const f=e.target.files[0];
- if(!f) return;
+ if(!f)return;
  const r=new FileReader();
  r.onload=()=>{
   const t=JSON.parse(r.result);
   items=t.data;
   viewingTemplate=true;
+
+  tabTitle.innerText="📂 템플릿 보기";
+  statusBar.innerText="템플릿 상태";
   imageArea.classList.add("template");
-  statusBar.innerText="📂 템플릿 보기";
+
   render();
  };
  r.readAsText(f);
 };
 
-/* 템플릿 → 내작업 복사 */
+/* ===== 템플릿 → 내작업 ===== */
 copyBtn.onclick=()=>{
- if(!viewingTemplate) return alert("템플릿 상태에서만 가능");
+ if(!viewingTemplate)return alert("템플릿 상태에서만 가능");
+
  myItems=JSON.parse(JSON.stringify(items));
  items=myItems;
  viewingTemplate=false;
+
+ tabTitle.innerText="📁 내 작업";
+ statusBar.innerText="내 작업 상태";
  imageArea.classList.remove("template");
- statusBar.innerText="📁 내 작업";
+
  save();
  render();
 };
 
 render();
 </script>
-
 </body>
 </html>
