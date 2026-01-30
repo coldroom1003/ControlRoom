@@ -7,13 +7,25 @@
 <style>
 body{margin:0;font-family:sans-serif;display:flex;height:100vh;overflow:hidden}
 
-#imageArea{flex:8;position:relative;background:#eee}
+/* 상태별 테두리 */
+#imageArea{
+ flex:8;
+ position:relative;
+ background:#eee;
+ border:4px solid #999;
+ transition:.2s;
+}
+#imageArea.template{
+ border-color:#4a90e2;
+}
+
 #canvas{
  width:100%;height:100%;
  background-size:contain;
  background-position:center;
  background-repeat:no-repeat;
 }
+
 #hitWrap{position:absolute;inset:0}
 
 .hit-area{
@@ -27,9 +39,10 @@ body{margin:0;font-family:sans-serif;display:flex;height:100vh;overflow:hidden}
  border:1px solid rgba(0,0,0,.3);
  border-radius:12px;
  padding:5px 10px;
+ font-size:14px;
 }
 
-/* 형광펜 효과 */
+/* 형광펜 */
 .hit-title.focused{
  background:linear-gradient(
   to top,
@@ -43,6 +56,26 @@ body{margin:0;font-family:sans-serif;display:flex;height:100vh;overflow:hidden}
  border-left:1px solid #ccc;
  display:flex;
  flex-direction:column;
+}
+
+#statusBar{
+ font-size:12px;
+ padding:4px 8px;
+ background:#f5f5f5;
+ border-bottom:1px solid #ddd;
+}
+
+#templateLabel{
+ position:absolute;
+ top:8px;
+ left:50%;
+ transform:translateX(-50%);
+ background:rgba(0,0,0,.6);
+ color:white;
+ padding:4px 10px;
+ border-radius:12px;
+ font-size:12px;
+ display:none;
 }
 
 #tabs{display:flex;border-bottom:1px solid #ccc}
@@ -72,15 +105,19 @@ button{margin:2px}
 <body>
 
 <div id="imageArea">
+ <div id="templateLabel"></div>
  <div id="canvas"></div>
  <div id="hitWrap"></div>
 </div>
 
 <div id="side">
+ <div id="statusBar">📁 내 작업</div>
+
  <div id="tabs">
   <div class="tab active" id="tabWork">내 작업</div>
   <div class="tab" id="tabTemplates">템플릿</div>
  </div>
+
  <ul id="list"></ul>
 </div>
 
@@ -96,8 +133,7 @@ button{margin:2px}
 </div>
 
 <script>
-/* ===== 요소 가져오기 ===== */
-const imageArea=document.getElementById("imageArea");
+const imageArea=imageArea=document.getElementById("imageArea");
 const canvas=document.getElementById("canvas");
 const hitWrap=document.getElementById("hitWrap");
 const list=document.getElementById("list");
@@ -114,33 +150,34 @@ const jsonInput=document.getElementById("jsonInput");
 const tabWork=document.getElementById("tabWork");
 const tabTemplates=document.getElementById("tabTemplates");
 
-/* ===== 상태 ===== */
+const statusBar=document.getElementById("statusBar");
+const templateLabel=document.getElementById("templateLabel");
+
 let items=JSON.parse(localStorage.getItem("mapData")||"[]");
+let myItems=[...items];
 let templates=JSON.parse(localStorage.getItem("templates")||"[]");
 
 let editMode=false;
 let selectedId=null;
 let currentTab="work";
+let viewingTemplate=null;
 
-/* ===== 저장 ===== */
 function save(){
- localStorage.setItem("mapData",JSON.stringify(items));
+ localStorage.setItem("mapData",JSON.stringify(myItems));
  localStorage.setItem("templates",JSON.stringify(templates));
 }
 
-/* ===== 편집 모드 ===== */
+/* 편집 */
 editBtn.onclick=()=>{
  editMode=!editMode;
  editBtn.classList.toggle("edit-on",editMode);
 };
 
-/* ===== 배경 업로드 ===== */
+/* 배경 */
 imgBtn.onclick=()=>{ if(editMode) imgInput.click(); };
-
 imgInput.onchange=e=>{
  const f=e.target.files[0];
  if(!f) return;
-
  const r=new FileReader();
  r.onload=()=>{
   canvas.style.backgroundImage=`url(${r.result})`;
@@ -148,13 +185,19 @@ imgInput.onchange=e=>{
  };
  r.readAsDataURL(f);
 };
-
 const bg=localStorage.getItem("bgImg");
 if(bg) canvas.style.backgroundImage=`url(${bg})`;
 
-/* ===== 탭 ===== */
+/* 탭 */
 tabWork.onclick=()=>{
  currentTab="work";
+ viewingTemplate=null;
+ items=myItems;
+
+ imageArea.classList.remove("template");
+ templateLabel.style.display="none";
+ statusBar.innerText="📁 내 작업";
+
  tabWork.classList.add("active");
  tabTemplates.classList.remove("active");
  render();
@@ -167,13 +210,13 @@ tabTemplates.onclick=()=>{
  render();
 };
 
-/* ===== 선택 ===== */
+/* 선택 */
 function select(it){
  selectedId=it.id;
  render();
 }
 
-/* ===== 렌더 ===== */
+/* 렌더 */
 function render(){
  hitWrap.innerHTML="";
  list.innerHTML="";
@@ -183,9 +226,15 @@ function render(){
    const li=document.createElement("li");
    li.textContent="📂 "+t.name;
    li.onclick=()=>{
+    viewingTemplate=t.name;
     items=t.data;
-    save();
-    tabWork.onclick();
+
+    imageArea.classList.add("template");
+    templateLabel.style.display="block";
+    templateLabel.innerText="템플릿: "+t.name;
+    statusBar.innerText="📂 템플릿 보기";
+
+    render();
    };
    list.appendChild(li);
   });
@@ -204,24 +253,23 @@ function render(){
 
   t.onclick=e=>{
    e.stopPropagation();
-
    if(editMode){
     t.contentEditable=true;
     t.focus();
     t.onblur=()=>{
      t.contentEditable=false;
      it.name=t.textContent;
-     save();
+     if(!viewingTemplate){
+      myItems=items;
+      save();
+     }
     };
-   }else{
-    select(it);
-   }
+   }else select(it);
   };
 
   d.appendChild(t);
   hitWrap.appendChild(d);
 
-  /* 리스트 */
   const li=document.createElement("li");
   li.className=it.id===selectedId?"active":"";
   li.innerHTML="<b>"+it.name+"</b>";
@@ -239,7 +287,10 @@ function render(){
    det.onblur=()=>{
     det.contentEditable=false;
     it.desc=det.textContent;
-    save();
+    if(!viewingTemplate){
+     myItems=items;
+     save();
+    }
    };
   };
 
@@ -250,11 +301,11 @@ function render(){
  });
 }
 
-/* ===== 더블클릭 추가 ===== */
+/* 추가 */
 imageArea.ondblclick=e=>{
- if(!editMode) return;
-
+ if(!editMode||viewingTemplate) return;
  const r=imageArea.getBoundingClientRect();
+
  items.push({
   id:Date.now(),
   name:"항목",
@@ -263,49 +314,24 @@ imageArea.ondblclick=e=>{
   y:(e.clientY-r.top)/r.height*100
  });
 
+ myItems=items;
  save();
  render();
 };
 
-/* ===== PNG ===== */
+/* PNG (화면 기준) */
 pngBtn.onclick=()=>{
- const bg=localStorage.getItem("bgImg");
- if(!bg) return;
-
- const img=new Image();
- img.src=bg;
-
- img.onload=()=>{
-  const c=document.createElement("canvas");
-  c.width=img.width;
-  c.height=img.height;
-  const ctx=c.getContext("2d");
-
-  ctx.drawImage(img,0,0);
-
-  items.forEach(it=>{
-   const x=it.x/100*c.width;
-   const y=it.y/100*c.height;
-
-   ctx.fillStyle="#fffdf5";
-   ctx.fillRect(x-40,y-15,80,30);
-
-   ctx.strokeRect(x-40,y-15,80,30);
-
-   ctx.fillStyle="#000";
-   ctx.fillText(it.name,x-35,y+5);
-  });
-
+ html2canvas(imageArea).then(c=>{
   const a=document.createElement("a");
   a.href=c.toDataURL();
   a.download="map.png";
   a.click();
- };
+ });
 };
 
-/* ===== JSON ===== */
+/* JSON */
 exportBtn.onclick=()=>{
- const data={name:"템플릿",data:items};
+ const data={name:"템플릿",data:myItems};
  const blob=new Blob([JSON.stringify(data)],{type:"application/json"});
  const a=document.createElement("a");
  a.href=URL.createObjectURL(blob);
@@ -314,15 +340,12 @@ exportBtn.onclick=()=>{
 };
 
 importBtn.onclick=()=>jsonInput.click();
-
 jsonInput.onchange=e=>{
  const f=e.target.files[0];
  if(!f) return;
-
  const r=new FileReader();
  r.onload=()=>{
-  const d=JSON.parse(r.result);
-  templates.push(d);
+  templates.push(JSON.parse(r.result));
   save();
   alert("템플릿 저장됨");
  };
@@ -331,5 +354,8 @@ jsonInput.onchange=e=>{
 
 render();
 </script>
+
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+
 </body>
 </html>
