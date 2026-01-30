@@ -114,6 +114,9 @@ const canvas=document.getElementById("canvas");
 const hitWrap=document.getElementById("hitWrap");
 const list=document.getElementById("list");
 const highlight=document.getElementById("highlight");
+const imageArea=document.getElementById("imageArea");
+
+/* ---------------- 저장 ---------------- */
 
 function autoSave(){
  localStorage.setItem("mapData",JSON.stringify(items));
@@ -124,10 +127,14 @@ function loadAuto(){
 }
 loadAuto();
 
+/* ---------------- 편집모드 ---------------- */
+
 editBtn.onclick=()=>{
  editMode=!editMode;
  editBtn.classList.toggle("edit-on",editMode);
 };
+
+/* ---------------- 배경 이미지 ---------------- */
 
 imgBtn.onclick=()=>{
  if(!editMode)return;
@@ -147,6 +154,16 @@ imgInput.onchange=e=>{
 const savedBg=localStorage.getItem("bgImg");
 if(savedBg) canvas.style.backgroundImage=`url(${savedBg})`;
 
+/* ---------------- 선택 ---------------- */
+
+function clearSelection(){
+ selectedId=null;
+ highlight.style.display="none";
+ document.querySelectorAll("li").forEach(li=>{
+  li.classList.remove("active");
+ });
+}
+
 function select(it){
  selectedId=it.id;
 
@@ -157,7 +174,17 @@ function select(it){
  document.querySelectorAll("li").forEach(li=>{
   li.classList.toggle("active",li.dataset.id==it.id);
  });
+
+ /* 리스트 토글 열기 */
+ document.querySelectorAll(".detail").forEach(d=>d.style.display="none");
+ const li=document.querySelector(`li[data-id="${it.id}"]`);
+ if(li){
+  const det=li.querySelector(".detail");
+  if(det) det.style.display="block";
+ }
 }
+
+/* ---------------- 렌더 ---------------- */
 
 function render(){
  hitWrap.innerHTML="";
@@ -179,14 +206,19 @@ function render(){
   t.className="hit-title";
   t.innerText=it.name;
 
-  /* 이름 수정 */
-  t.ondblclick=()=>{
-   if(!editMode)return;
-   const v=prompt("이름",it.name);
-   if(v){it.name=v;autoSave();render();}
+  /* ✅ 한번 클릭 수정 (편집모드) */
+  t.onclick=(e)=>{
+   e.stopPropagation();
+
+   if(editMode){
+    const v=prompt("이름",it.name);
+    if(v){it.name=v;autoSave();render();}
+    return;
+   }
+
+   select(it);
   };
 
-  d.onclick=()=>select(it);
   d.appendChild(t);
   hitWrap.appendChild(d);
 
@@ -199,16 +231,16 @@ function render(){
   det.className="detail";
   det.innerText=it.desc;
 
-  /* 설명 수정 */
-  det.ondblclick=()=>{
+  /* ✅ 설명 한번 클릭 수정 */
+  det.onclick=(e)=>{
+   e.stopPropagation();
    if(!editMode)return;
    const v=prompt("설명",it.desc);
    if(v){it.desc=v;autoSave();render();}
   };
 
-  li.onclick=()=>{
-   document.querySelectorAll(".detail").forEach(x=>x.style.display="none");
-   det.style.display="block";
+  li.onclick=(e)=>{
+   e.stopPropagation();
    select(it);
   };
 
@@ -217,10 +249,13 @@ function render(){
  });
 }
 
-/* 항목 추가 */
+/* ---------------- 항목 추가 ---------------- */
+
 imageArea.ondblclick=e=>{
  if(!editMode)return;
+
  const r=imageArea.getBoundingClientRect();
+
  const it={
   id:Date.now(),
   name:"새항목",
@@ -228,14 +263,25 @@ imageArea.ondblclick=e=>{
   x:(e.clientX-r.left)/r.width*100,
   y:(e.clientY-r.top)/r.height*100
  };
+
  items.push(it);
  autoSave();
  render();
 };
 
+/* ---------------- 배경 클릭 시 포커스 해제 ---------------- */
+
+imageArea.onclick=(e)=>{
+ if(editMode)return;
+ if(e.target===imageArea || e.target===canvas){
+  clearSelection();
+ }
+};
+
 searchBox.oninput=render;
 
-/* PNG 내보내기 */
+/* ---------------- PNG ---------------- */
+
 pngBtn.onclick=()=>{
  const c=document.createElement("canvas");
  const ctx=c.getContext("2d");
@@ -272,7 +318,8 @@ pngBtn.onclick=()=>{
  };
 };
 
-/* JSON */
+/* ---------------- JSON ---------------- */
+
 exportBtn.onclick=()=>{
  const data={
   items,
@@ -301,34 +348,6 @@ jsonInput.onchange=e=>{
   render();
  };
  r.readAsText(f);
-};
-
-/* 슬롯 */
-saveSlotBtn.onclick=()=>{
- const name=prompt("슬롯 이름");
- if(!name)return;
- localStorage.setItem("slot_"+name,JSON.stringify({
-  items,
-  bg:localStorage.getItem("bgImg")
- }));
- alert("저장됨");
-};
-
-loadSlotBtn.onclick=()=>{
- const keys=Object.keys(localStorage).filter(k=>k.startsWith("slot_"));
- const name=prompt("슬롯 이름\n"+keys.join("\n"));
- if(!name)return;
-
- const d=JSON.parse(localStorage.getItem(name));
- if(!d)return;
-
- items=d.items||[];
- if(d.bg){
-  canvas.style.backgroundImage=`url(${d.bg})`;
-  localStorage.setItem("bgImg",d.bg);
- }
- autoSave();
- render();
 };
 
 render();
