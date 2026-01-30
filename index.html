@@ -1,114 +1,61 @@
 <!DOCTYPE html>
-<html lang="ko">
+<html>
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>공간 네이밍 맵</title>
-
-<link href="https://fonts.googleapis.com/css2?family=Nanum+Pen+Script&display=swap" rel="stylesheet">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
 
 <style>
-*{box-sizing:border-box;font-family:'Nanum Pen Script',sans-serif;}
-body{margin:0;background:#faf7f2;touch-action:manipulation;}
+body{margin:0;font-family:sans-serif;display:flex;height:100vh;overflow:hidden}
+#imageArea{flex:8;position:relative;background:#eee}
+#canvas{width:100%;height:100%;background-size:contain;background-position:center;background-repeat:no-repeat}
+#hitWrap{position:absolute;inset:0}
+.hit-area{position:absolute;transform:translate(-50%,-50%);cursor:pointer}
+.hit-title{background:yellow;padding:4px 8px;border-radius:12px;white-space:nowrap}
 
-.container{display:grid;grid-template-columns:8fr 2fr;height:100vh;}
+#highlight{position:absolute;border:2px solid red;border-radius:50%;width:60px;height:60px;transform:translate(-50%,-50%);display:none;pointer-events:none}
 
-.image-area{
- position:relative;
- border:2px solid #444;
- background:white;
- overflow:hidden;
-}
+#side{flex:2;border-left:1px solid #ccc;display:flex;flex-direction:column}
+#searchBox{padding:8px;font-size:16px}
+ul{list-style:none;margin:0;padding:0;overflow:auto;flex:1}
+li{padding:10px;border-bottom:1px solid #eee;position:relative}
+li.active{background:#f5f5f5}
+.detail{display:none;margin-top:6px;color:#555}
+.deleteBtn{position:absolute;right:6px;top:6px;cursor:pointer;color:#000}
 
-#canvas{
- width:100%;
- height:100%;
- background:center/contain no-repeat;
-}
-
-.hit-area{position:absolute;transform:translate(-50%,-50%);}
-.hit-title{
- background:#fffdf5;
- border:1px solid #333;
- padding:4px 8px;
- cursor:pointer;
-}
-
-.highlight{
- position:absolute;
- width:44px;height:30px;
- background:rgba(255,235,59,0.6);
- border-radius:50%;
- transform:translate(-50%,-50%);
- display:none;
- pointer-events:none;
-}
-
-.info-area{border-left:2px dashed #aaa;padding:10px;overflow-y:auto;}
-button{cursor:pointer;font-size:18px;}
-
-li{
- background:#fffdf5;
- margin-bottom:8px;
- padding:8px;
- border:1px solid #ccc;
- cursor:pointer;
-}
-
-li.active{background:#ffeaa7;}
-
-.detail{
- display:none;
- margin-top:6px;
- border-left:4px solid #f4d03f;
- padding-left:6px;
-}
-
-.edit-on{background:#ff7675;color:white;}
-.topbar{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px;}
-input[type="text"]{padding:6px;font-size:16px;}
+#topbar{position:fixed;bottom:10px;left:10px;z-index:5}
+button{padding:8px 12px;margin:2px}
+.edit-on{background:#4caf50;color:#fff}
 </style>
 </head>
 
 <body>
 
-<div class="container">
-
-<div class="image-area" id="imageArea">
+<div id="imageArea">
 <div id="canvas"></div>
 <div id="hitWrap"></div>
-<div id="highlight" class="highlight"></div>
+<div id="highlight"></div>
 </div>
 
-<div class="info-area">
-<div class="topbar">
-
-<button id="editBtn">편집</button>
-<button id="imgBtn">이미지</button>
-
-<button id="pngBtn">PNG</button>
-<button id="exportBtn">JSON</button>
-<button id="importBtn">불러오기</button>
-
-<button id="saveSlotBtn">슬롯저장</button>
-<button id="loadSlotBtn">슬롯불러오기</button>
-
-<input id="searchBox" type="text" placeholder="검색">
-
-<input type="file" id="imgInput" hidden accept="image/*">
-<input type="file" id="jsonInput" hidden accept=".json">
-
-</div>
-
+<div id="side">
+<input id="searchBox" placeholder="검색">
 <ul id="list"></ul>
 </div>
 
+<div id="topbar">
+<button id="editBtn">편집</button>
+<button id="imgBtn">배경</button>
+<button id="pngBtn">PNG</button>
+<button id="exportBtn">JSON</button>
+<button id="importBtn">불러오기</button>
+<input type="file" id="imgInput" hidden accept="image/*">
+<input type="file" id="jsonInput" hidden accept=".json">
 </div>
 
 <script>
 let items=[];
 let editMode=false;
 let selectedId=null;
+let longPressTimer=null;
 
 const canvas=document.getElementById("canvas");
 const hitWrap=document.getElementById("hitWrap");
@@ -116,31 +63,16 @@ const list=document.getElementById("list");
 const highlight=document.getElementById("highlight");
 const imageArea=document.getElementById("imageArea");
 
-/* ---------------- 저장 ---------------- */
-
-function autoSave(){
- localStorage.setItem("mapData",JSON.stringify(items));
-}
-function loadAuto(){
- const d=localStorage.getItem("mapData");
- if(d) items=JSON.parse(d);
-}
+/* 저장 */
+function autoSave(){localStorage.setItem("mapData",JSON.stringify(items))}
+function loadAuto(){const d=localStorage.getItem("mapData");if(d)items=JSON.parse(d)}
 loadAuto();
 
-/* ---------------- 편집모드 ---------------- */
+/* 편집 */
+editBtn.onclick=()=>{editMode=!editMode;editBtn.classList.toggle("edit-on",editMode)}
 
-editBtn.onclick=()=>{
- editMode=!editMode;
- editBtn.classList.toggle("edit-on",editMode);
-};
-
-/* ---------------- 배경 이미지 ---------------- */
-
-imgBtn.onclick=()=>{
- if(!editMode)return;
- imgInput.click();
-};
-
+/* 배경 */
+imgBtn.onclick=()=>{if(editMode)imgInput.click()}
 imgInput.onchange=e=>{
  const f=e.target.files[0];
  const r=new FileReader();
@@ -150,30 +82,19 @@ imgInput.onchange=e=>{
  };
  r.readAsDataURL(f);
 };
-
 const savedBg=localStorage.getItem("bgImg");
-if(savedBg) canvas.style.backgroundImage=`url(${savedBg})`;
+if(savedBg)canvas.style.backgroundImage=`url(${savedBg})`;
 
-/* ---------------- 선택 ---------------- */
-
-function closeAllDetails(){
- document.querySelectorAll(".detail").forEach(d=>{
-  d.style.display="none";
- });
-}
-
-function clearSelection(){
+/* 선택 */
+function clearSel(){
  selectedId=null;
  highlight.style.display="none";
- document.querySelectorAll("li").forEach(li=>{
-  li.classList.remove("active");
- });
- closeAllDetails();
+ document.querySelectorAll("li").forEach(li=>li.classList.remove("active"));
+ document.querySelectorAll(".detail").forEach(d=>d.style.display="none");
 }
 
 function select(it){
  selectedId=it.id;
-
  highlight.style.display="block";
  highlight.style.left=it.x+"%";
  highlight.style.top=it.y+"%";
@@ -182,27 +103,22 @@ function select(it){
   li.classList.toggle("active",li.dataset.id==it.id);
  });
 
- closeAllDetails();
+ document.querySelectorAll(".detail").forEach(d=>d.style.display="none");
  const li=document.querySelector(`li[data-id="${it.id}"]`);
- if(li){
-  const det=li.querySelector(".detail");
-  if(det) det.style.display="block";
- }
+ if(li)li.querySelector(".detail").style.display="block";
 }
 
-/* ---------------- 렌더 ---------------- */
-
+/* 렌더 */
 function render(){
  hitWrap.innerHTML="";
  list.innerHTML="";
  const q=searchBox.value.toLowerCase();
 
  items.filter(i=>
-  i.name.toLowerCase().includes(q) ||
+  i.name.toLowerCase().includes(q)||
   i.desc.toLowerCase().includes(q)
  ).forEach(it=>{
 
-  /* 마커 */
   const d=document.createElement("div");
   d.className="hit-area";
   d.style.left=it.x+"%";
@@ -212,24 +128,34 @@ function render(){
   t.className="hit-title";
   t.innerText=it.name;
 
-  /* ✅ 바로 수정 */
-  t.onclick=(e)=>{
-   e.stopPropagation();
+  /* 드래그 */
+  let dragging=false;
 
+  t.onpointerdown=e=>{
+   if(!editMode)return;
+   dragging=true;
+  };
+  window.onpointermove=e=>{
+   if(!dragging)return;
+   const r=imageArea.getBoundingClientRect();
+   it.x=(e.clientX-r.left)/r.width*100;
+   it.y=(e.clientY-r.top)/r.height*100;
+   autoSave();render();
+  };
+  window.onpointerup=()=>dragging=false;
+
+  /* 수정 */
+  t.onclick=e=>{
+   e.stopPropagation();
    if(editMode){
     t.contentEditable=true;
     t.focus();
-
     t.onblur=()=>{
      t.contentEditable=false;
-     it.name=t.innerText.trim()||"이름";
-     autoSave();
-     render();
+     it.name=t.innerText||"이름";
+     autoSave();render();
     };
-    return;
-   }
-
-   select(it);
+   }else select(it);
   };
 
   d.appendChild(t);
@@ -239,117 +165,105 @@ function render(){
   const li=document.createElement("li");
   li.dataset.id=it.id;
 
-  const title=document.createElement("b");
-  title.innerText=it.name;
-
-  /* 제목도 바로 수정 */
-  title.onclick=(e)=>{
+  const del=document.createElement("span");
+  del.innerText="✕";
+  del.className="deleteBtn";
+  del.onclick=e=>{
    e.stopPropagation();
    if(!editMode)return;
+   items=items.filter(x=>x.id!=it.id);
+   autoSave();render();
+  };
 
+  const title=document.createElement("b");
+  title.innerText=it.name;
+  title.onclick=e=>{
+   e.stopPropagation();
+   if(!editMode)return;
    title.contentEditable=true;
    title.focus();
-
    title.onblur=()=>{
     title.contentEditable=false;
-    it.name=title.innerText.trim()||"이름";
-    autoSave();
-    render();
+    it.name=title.innerText;
+    autoSave();render();
    };
   };
 
   const det=document.createElement("div");
   det.className="detail";
   det.innerText=it.desc;
-
-  /* ✅ 설명 바로 수정 */
-  det.onclick=(e)=>{
+  det.onclick=e=>{
    e.stopPropagation();
    if(!editMode)return;
-
    det.contentEditable=true;
    det.focus();
-
    det.onblur=()=>{
     det.contentEditable=false;
-    it.desc=det.innerText.trim()||"";
+    it.desc=det.innerText;
     autoSave();
    };
   };
 
-  li.onclick=(e)=>{
-   e.stopPropagation();
-   select(it);
-  };
-
+  li.onclick=e=>{e.stopPropagation();select(it)};
+  li.appendChild(del);
   li.appendChild(title);
   li.appendChild(det);
   list.appendChild(li);
  });
 }
 
-/* ---------------- 항목 추가 ---------------- */
-
+/* 더블클릭 추가 */
 imageArea.ondblclick=e=>{
  if(!editMode)return;
+ addItem(e.clientX,e.clientY);
+};
 
+/* 길게누르기(모바일) */
+imageArea.onpointerdown=e=>{
+ if(!editMode)return;
+ longPressTimer=setTimeout(()=>{
+  addItem(e.clientX,e.clientY);
+ },3000);
+};
+imageArea.onpointerup=()=>clearTimeout(longPressTimer);
+
+function addItem(cx,cy){
  const r=imageArea.getBoundingClientRect();
-
- const it={
+ items.push({
   id:Date.now(),
   name:"새항목",
   desc:"설명",
-  x:(e.clientX-r.left)/r.width*100,
-  y:(e.clientY-r.top)/r.height*100
- };
+  x:(cx-r.left)/r.width*100,
+  y:(cy-r.top)/r.height*100
+ });
+ autoSave();render();
+}
 
- items.push(it);
- autoSave();
- render();
-};
-
-/* ---------------- 배경 클릭 시 포커스 해제 ---------------- */
-
-imageArea.onclick=(e)=>{
- if(editMode)return;
- if(e.target===imageArea || e.target===canvas){
-  clearSelection();
- }
+/* 배경클릭 해제 */
+imageArea.onclick=e=>{
+ if(!editMode&&(e.target===imageArea||e.target===canvas))clearSel();
 };
 
 searchBox.oninput=render;
 
-/* ---------------- PNG ---------------- */
-
+/* PNG */
 pngBtn.onclick=()=>{
  const c=document.createElement("canvas");
  const ctx=c.getContext("2d");
-
  const bg=new Image();
  bg.src=localStorage.getItem("bgImg");
 
  bg.onload=()=>{
-  c.width=bg.width;
-  c.height=bg.height;
+  c.width=bg.width;c.height=bg.height;
   ctx.drawImage(bg,0,0);
-
   items.forEach(it=>{
    ctx.fillStyle="yellow";
    ctx.beginPath();
-   ctx.ellipse(
-    it.x/100*c.width,
-    it.y/100*c.height,
-    60,30,0,0,Math.PI*2
-   );
+   ctx.ellipse(it.x/100*c.width,it.y/100*c.height,60,30,0,0,Math.PI*2);
    ctx.fill();
-
    ctx.fillStyle="black";
-   ctx.font="24px sans-serif";
-   ctx.fillText(it.name,
-    it.x/100*c.width-30,
-    it.y/100*c.height+8);
+   ctx.fillText(it.name,it.x/100*c.width-30,it.y/100*c.height+5);
   });
-
   const a=document.createElement("a");
   a.href=c.toDataURL();
   a.download="map.png";
@@ -357,20 +271,15 @@ pngBtn.onclick=()=>{
  };
 };
 
-/* ---------------- JSON ---------------- */
-
+/* JSON */
 exportBtn.onclick=()=>{
- const data={
-  items,
-  bg:localStorage.getItem("bgImg")
- };
+ const data={items,bg:localStorage.getItem("bgImg")};
  const blob=new Blob([JSON.stringify(data)],{type:"application/json"});
  const a=document.createElement("a");
  a.href=URL.createObjectURL(blob);
  a.download="map.json";
  a.click();
 };
-
 importBtn.onclick=()=>jsonInput.click();
 
 jsonInput.onchange=e=>{
@@ -383,8 +292,7 @@ jsonInput.onchange=e=>{
    canvas.style.backgroundImage=`url(${d.bg})`;
    localStorage.setItem("bgImg",d.bg);
   }
-  autoSave();
-  render();
+  autoSave();render();
  };
  r.readAsText(f);
 };
