@@ -11,11 +11,7 @@
 *{box-sizing:border-box;font-family:'Nanum Pen Script',sans-serif;}
 body{margin:0;background:#faf7f2;touch-action:manipulation;}
 
-.container{
- display:grid;
- grid-template-columns:8fr 2fr;
- height:100vh;
-}
+.container{display:grid;grid-template-columns:8fr 2fr;height:100vh;}
 
 .image-area{
  position:relative;
@@ -30,11 +26,7 @@ body{margin:0;background:#faf7f2;touch-action:manipulation;}
  background:center/contain no-repeat;
 }
 
-.hit-area{
- position:absolute;
- transform:translate(-50%,-50%);
-}
-
+.hit-area{position:absolute;transform:translate(-50%,-50%);}
 .hit-title{
  background:#fffdf5;
  border:1px solid #333;
@@ -44,20 +36,15 @@ body{margin:0;background:#faf7f2;touch-action:manipulation;}
 
 .highlight{
  position:absolute;
- width:40px;height:26px;
- background:rgba(255,235,59,0.7);
+ width:44px;height:30px;
+ background:rgba(255,235,59,0.6);
  border-radius:50%;
  transform:translate(-50%,-50%);
  display:none;
  pointer-events:none;
 }
 
-.info-area{
- border-left:2px dashed #aaa;
- padding:10px;
- overflow-y:auto;
-}
-
+.info-area{border-left:2px dashed #aaa;padding:10px;overflow-y:auto;}
 button{cursor:pointer;font-size:18px;}
 
 li{
@@ -65,15 +52,21 @@ li{
  margin-bottom:8px;
  padding:8px;
  border:1px solid #ccc;
+ cursor:pointer;
 }
 
-.detail{display:none;margin-top:6px;border-left:4px solid #f4d03f;padding-left:6px;}
+li.active{background:#ffeaa7;}
+
+.detail{
+ display:none;
+ margin-top:6px;
+ border-left:4px solid #f4d03f;
+ padding-left:6px;
+}
 
 .edit-on{background:#ff7675;color:white;}
-
 .topbar{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px;}
 input[type="text"]{padding:6px;font-size:16px;}
-
 </style>
 </head>
 
@@ -93,7 +86,8 @@ input[type="text"]{padding:6px;font-size:16px;}
 <button id="editBtn">편집</button>
 <button id="imgBtn">이미지</button>
 
-<button id="exportBtn">내보내기</button>
+<button id="pngBtn">PNG</button>
+<button id="exportBtn">JSON</button>
 <button id="importBtn">불러오기</button>
 
 <button id="saveSlotBtn">슬롯저장</button>
@@ -114,6 +108,7 @@ input[type="text"]{padding:6px;font-size:16px;}
 <script>
 let items=[];
 let editMode=false;
+let selectedId=null;
 
 const canvas=document.getElementById("canvas");
 const hitWrap=document.getElementById("hitWrap");
@@ -123,19 +118,18 @@ const highlight=document.getElementById("highlight");
 function autoSave(){
  localStorage.setItem("mapData",JSON.stringify(items));
 }
-
 function loadAuto(){
  const d=localStorage.getItem("mapData");
  if(d) items=JSON.parse(d);
 }
 loadAuto();
 
-document.getElementById("editBtn").onclick=()=>{
+editBtn.onclick=()=>{
  editMode=!editMode;
- event.target.classList.toggle("edit-on",editMode);
+ editBtn.classList.toggle("edit-on",editMode);
 };
 
-document.getElementById("imgBtn").onclick=()=>{
+imgBtn.onclick=()=>{
  if(!editMode)return;
  imgInput.click();
 };
@@ -153,6 +147,18 @@ imgInput.onchange=e=>{
 const savedBg=localStorage.getItem("bgImg");
 if(savedBg) canvas.style.backgroundImage=`url(${savedBg})`;
 
+function select(it){
+ selectedId=it.id;
+
+ highlight.style.display="block";
+ highlight.style.left=it.x+"%";
+ highlight.style.top=it.y+"%";
+
+ document.querySelectorAll("li").forEach(li=>{
+  li.classList.toggle("active",li.dataset.id==it.id);
+ });
+}
+
 function render(){
  hitWrap.innerHTML="";
  list.innerHTML="";
@@ -162,6 +168,8 @@ function render(){
   i.name.toLowerCase().includes(q) ||
   i.desc.toLowerCase().includes(q)
  ).forEach(it=>{
+
+  /* 마커 */
   const d=document.createElement("div");
   d.className="hit-area";
   d.style.left=it.x+"%";
@@ -171,6 +179,7 @@ function render(){
   t.className="hit-title";
   t.innerText=it.name;
 
+  /* 이름 수정 */
   t.ondblclick=()=>{
    if(!editMode)return;
    const v=prompt("이름",it.name);
@@ -181,17 +190,20 @@ function render(){
   d.appendChild(t);
   hitWrap.appendChild(d);
 
+  /* 리스트 */
   const li=document.createElement("li");
+  li.dataset.id=it.id;
   li.innerHTML="<b>"+it.name+"</b>";
 
   const det=document.createElement("div");
   det.className="detail";
   det.innerText=it.desc;
 
+  /* 설명 수정 */
   det.ondblclick=()=>{
    if(!editMode)return;
    const v=prompt("설명",it.desc);
-   if(v){it.desc=v;autoSave();}
+   if(v){it.desc=v;autoSave();render();}
   };
 
   li.onclick=()=>{
@@ -205,12 +217,7 @@ function render(){
  });
 }
 
-function select(it){
- highlight.style.display="block";
- highlight.style.left=it.x+"%";
- highlight.style.top=it.y+"%";
-}
-
+/* 항목 추가 */
 imageArea.ondblclick=e=>{
  if(!editMode)return;
  const r=imageArea.getBoundingClientRect();
@@ -228,7 +235,45 @@ imageArea.ondblclick=e=>{
 
 searchBox.oninput=render;
 
-document.getElementById("exportBtn").onclick=()=>{
+/* PNG 내보내기 */
+pngBtn.onclick=()=>{
+ const c=document.createElement("canvas");
+ const ctx=c.getContext("2d");
+
+ const bg=new Image();
+ bg.src=localStorage.getItem("bgImg");
+
+ bg.onload=()=>{
+  c.width=bg.width;
+  c.height=bg.height;
+  ctx.drawImage(bg,0,0);
+
+  items.forEach(it=>{
+   ctx.fillStyle="yellow";
+   ctx.beginPath();
+   ctx.ellipse(
+    it.x/100*c.width,
+    it.y/100*c.height,
+    60,30,0,0,Math.PI*2
+   );
+   ctx.fill();
+
+   ctx.fillStyle="black";
+   ctx.font="24px sans-serif";
+   ctx.fillText(it.name,
+    it.x/100*c.width-30,
+    it.y/100*c.height+8);
+  });
+
+  const a=document.createElement("a");
+  a.href=c.toDataURL();
+  a.download="map.png";
+  a.click();
+ };
+};
+
+/* JSON */
+exportBtn.onclick=()=>{
  const data={
   items,
   bg:localStorage.getItem("bgImg")
@@ -240,7 +285,7 @@ document.getElementById("exportBtn").onclick=()=>{
  a.click();
 };
 
-document.getElementById("importBtn").onclick=()=>jsonInput.click();
+importBtn.onclick=()=>jsonInput.click();
 
 jsonInput.onchange=e=>{
  const f=e.target.files[0];
@@ -258,21 +303,22 @@ jsonInput.onchange=e=>{
  r.readAsText(f);
 };
 
-/* 슬롯 시스템 */
-document.getElementById("saveSlotBtn").onclick=()=>{
+/* 슬롯 */
+saveSlotBtn.onclick=()=>{
  const name=prompt("슬롯 이름");
  if(!name)return;
  localStorage.setItem("slot_"+name,JSON.stringify({
   items,
   bg:localStorage.getItem("bgImg")
  }));
- alert("슬롯 저장됨");
+ alert("저장됨");
 };
 
-document.getElementById("loadSlotBtn").onclick=()=>{
+loadSlotBtn.onclick=()=>{
  const keys=Object.keys(localStorage).filter(k=>k.startsWith("slot_"));
  const name=prompt("슬롯 이름\n"+keys.join("\n"));
  if(!name)return;
+
  const d=JSON.parse(localStorage.getItem(name));
  if(!d)return;
 
