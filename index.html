@@ -7,7 +7,13 @@
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 
 <style>
-body{margin:0;display:flex;height:100vh;font-family:sans-serif}
+body{
+ margin:0;
+ display:flex;
+ height:100vh;
+ font-family:sans-serif;
+ background:#f6f1e7; /* 종이 아이보리 */
+}
 
 /* ===== 좌측 ===== */
 #left{flex:8;display:flex;flex-direction:column}
@@ -15,8 +21,8 @@ body{margin:0;display:flex;height:100vh;font-family:sans-serif}
 .tabs{
  display:flex;
  height:36px;
- background:#eee;
- border-bottom:1px solid #ccc;
+ background:#e8dcc8;
+ border-bottom:1px solid #c9bda8;
 }
 .tab{
  flex:1;
@@ -25,13 +31,17 @@ body{margin:0;display:flex;height:100vh;font-family:sans-serif}
  justify-content:center;
  cursor:pointer;
  font-size:14px;
+ color:#6b5e4a;
 }
-.tab.active{background:white;font-weight:bold}
+.tab.active{
+ background:#fffdf7;
+ font-weight:bold;
+}
 
 #imageArea{
  flex:1;
  position:relative;
- background:#ddd;
+ background:#e9e2d6;
 }
 #canvas{
  width:100%;height:100%;
@@ -43,33 +53,78 @@ body{margin:0;display:flex;height:100vh;font-family:sans-serif}
 .hit{
  position:absolute;
  transform:translate(-50%,-50%);
- background:#fffdf5;
- border:1px solid #555;
- padding:4px 8px;
- border-radius:8px;
+ background:#fffdf7;
+ border:1px solid #9c8f7a;
+ padding:5px 9px;
+ border-radius:10px;
  cursor:pointer;
+ color:#5c5141;
 }
-.hit.active{background:#fff3a0}
+.hit.active{
+ background:#ffe9a8;
+}
 
 /* ===== 우측 ===== */
-#side{flex:2;border-left:1px solid #ccc;display:flex;flex-direction:column}
+#side{
+ flex:2;
+ border-left:1px solid #c9bda8;
+ display:flex;
+ flex-direction:column;
+ background:#fffdf7;
+}
+
+#search{
+ padding:8px;
+ border:none;
+ border-bottom:1px solid #ddd;
+ outline:none;
+ background:#fffaf0;
+}
+
 ul{list-style:none;margin:0;padding:0;flex:1;overflow:auto}
-li{padding:8px;border-bottom:1px solid #eee;cursor:pointer}
-li.active{background:#f5f5f5}
-.detail{font-size:13px;color:#555;display:none}
+li{
+ padding:8px;
+ border-bottom:1px solid #eee;
+ cursor:pointer;
+ color:#5c5141;
+}
+li.active{background:#f3e6c8}
+
+.detail{
+ font-size:13px;
+ color:#7a6f5c;
+ display:none;
+ margin-top:4px;
+}
+
+.del{
+ float:right;
+ color:#c97b7b;
+ cursor:pointer;
+}
 
 /* ===== 하단바 ===== */
 #bar{
  position:fixed;
  bottom:10px;
  left:10px;
- background:white;
- padding:6px;
- border-radius:10px;
- box-shadow:0 2px 6px rgba(0,0,0,.2);
+ background:#fffdf7;
+ padding:8px;
+ border-radius:12px;
+ box-shadow:0 2px 6px rgba(0,0,0,.15);
 }
-button{margin:2px}
-.edit-on{background:#4caf50;color:white}
+button{
+ margin:2px;
+ background:#f3d8e2;
+ border:none;
+ padding:6px 10px;
+ border-radius:8px;
+ cursor:pointer;
+ color:#5c5141;
+}
+.edit-on{
+ background:#a8d8c9;
+}
 </style>
 </head>
 
@@ -88,6 +143,7 @@ button{margin:2px}
 </div>
 
 <div id="side">
+ <input id="search" placeholder="검색...">
  <ul id="list"></ul>
 </div>
 
@@ -103,7 +159,6 @@ button{margin:2px}
 </div>
 
 <script>
-/* ===== 상태 ===== */
 let myData=JSON.parse(localStorage.getItem("myData")||"[]");
 let tplData=[];
 let items=myData;
@@ -111,11 +166,13 @@ let items=myData;
 let edit=false;
 let selected=null;
 let mode="my";
+let searchText="";
 
 /* ===== 요소 ===== */
 const hits=document.getElementById("hits");
 const list=document.getElementById("list");
 const canvas=document.getElementById("canvas");
+const search=document.getElementById("search");
 
 const editBtn=document.getElementById("editBtn");
 const bgBtn=document.getElementById("bgBtn");
@@ -128,16 +185,13 @@ const jsonFile=document.getElementById("jsonFile");
 
 /* ===== 탭 ===== */
 tabMy.onclick=()=>{
- mode="my";
- items=myData;
+ mode="my"; items=myData;
  tabMy.classList.add("active");
  tabTpl.classList.remove("active");
  render();
 };
-
 tabTpl.onclick=()=>{
- mode="tpl";
- items=tplData;
+ mode="tpl"; items=tplData;
  tabTpl.classList.add("active");
  tabMy.classList.remove("active");
  render();
@@ -147,6 +201,12 @@ tabTpl.onclick=()=>{
 editBtn.onclick=()=>{
  edit=!edit;
  editBtn.classList.toggle("edit-on",edit);
+};
+
+/* ===== 검색 ===== */
+search.oninput=e=>{
+ searchText=e.target.value.toLowerCase();
+ render();
 };
 
 /* ===== 배경 ===== */
@@ -161,14 +221,12 @@ bgInput.onchange=e=>{
  };
  r.readAsDataURL(f);
 };
-
 const bg=localStorage.getItem("bg");
 if(bg) canvas.style.backgroundImage=`url(${bg})`;
 
 /* ===== 추가 ===== */
 imageArea.ondblclick=e=>{
  if(!edit||mode!=="my")return;
-
  const r=imageArea.getBoundingClientRect();
  myData.push({
   id:Date.now(),
@@ -177,8 +235,7 @@ imageArea.ondblclick=e=>{
   x:(e.clientX-r.left)/r.width*100,
   y:(e.clientY-r.top)/r.height*100
  });
- save();
- render();
+ save(); render();
 };
 
 /* ===== 저장 ===== */
@@ -186,12 +243,25 @@ function save(){
  localStorage.setItem("myData",JSON.stringify(myData));
 }
 
+/* ===== 삭제 ===== */
+function remove(id){
+ myData=myData.filter(x=>x.id!==id);
+ items=myData;
+ save();
+ render();
+}
+
 /* ===== 렌더 ===== */
 function render(){
  hits.innerHTML="";
  list.innerHTML="";
 
- items.forEach(it=>{
+ let filtered=items.filter(it=>
+  it.name.toLowerCase().includes(searchText) ||
+  it.desc.toLowerCase().includes(searchText)
+ );
+
+ filtered.forEach(it=>{
   /* 그림 */
   const d=document.createElement("div");
   d.className="hit"+(it.id===selected?" active":"");
@@ -210,8 +280,7 @@ function render(){
      save();
     };
    }else{
-    selected=it.id;
-    render();
+    selected=it.id; render();
    }
   };
   hits.appendChild(d);
@@ -219,6 +288,14 @@ function render(){
   /* 리스트 */
   const li=document.createElement("li");
   if(it.id===selected) li.className="active";
+
+  const del=document.createElement("span");
+  del.className="del";
+  del.textContent="✕";
+  del.onclick=e=>{
+   e.stopPropagation();
+   if(edit&&mode==="my") remove(it.id);
+  };
 
   const t=document.createElement("div");
   t.textContent=it.name;
@@ -241,8 +318,9 @@ function render(){
    }
   };
 
-  li.onclick=()=>{selected=it.id;render();};
+  li.onclick=()=>{selected=it.id; render();};
 
+  li.appendChild(del);
   li.appendChild(t);
   li.appendChild(det);
   list.appendChild(li);
