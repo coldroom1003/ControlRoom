@@ -12,10 +12,9 @@ body{
  display:flex;
  height:100vh;
  font-family:sans-serif;
- background:#fdfefe; /* 눈편한 화이트 */
+ background:#fdfefe;
 }
 
-/* ===== 좌측 ===== */
 #left{flex:8;display:flex;flex-direction:column}
 
 .tabs{
@@ -33,16 +32,15 @@ body{
  font-size:14px;
  color:#4a5a6a;
 }
-.tab.active{
- background:white;
- font-weight:bold;
-}
+.tab.active{background:white;font-weight:bold}
 
 #imageArea{
  flex:1;
  position:relative;
  background:#f7fafc;
+ overflow:hidden;
 }
+
 #canvas{
  width:100%;height:100%;
  background-size:contain;
@@ -50,21 +48,24 @@ body{
  background-repeat:no-repeat;
 }
 
+#lines{
+ position:absolute;
+ inset:0;
+ pointer-events:none;
+}
+
 .hit{
  position:absolute;
  transform:translate(-50%,-50%);
- background:#ffffff;
+ background:#fffef9;
  border:1px solid #c9d6e2;
  padding:5px 9px;
  border-radius:10px;
  cursor:pointer;
  color:#3c4b5a;
 }
-.hit.active{
- background:#e8f4ff;
-}
+.hit.active{background:#e8f4ff}
 
-/* ===== 우측 ===== */
 #side{
  flex:2;
  border-left:1px solid #d6e2ee;
@@ -78,15 +79,10 @@ body{
  border:none;
  border-bottom:1px solid #dde7f0;
  outline:none;
- background:white;
 }
 
 ul{list-style:none;margin:0;padding:0;flex:1;overflow:auto}
-li{
- padding:8px;
- border-bottom:1px solid #eef2f6;
- cursor:pointer;
-}
+li{padding:8px;border-bottom:1px solid #eef2f6;cursor:pointer}
 li.active{background:#eaf4ff}
 
 .detail{
@@ -96,13 +92,8 @@ li.active{background:#eaf4ff}
  margin-top:4px;
 }
 
-.del{
- float:right;
- color:#7f8fa6;
- cursor:pointer;
-}
+.del{float:right;cursor:pointer}
 
-/* ===== 하단바 ===== */
 #bar{
  position:fixed;
  bottom:10px;
@@ -120,14 +111,6 @@ button{
  padding:6px 12px;
  border-radius:8px;
  cursor:pointer;
- color:#2f4f6f;
- transition:.15s;
-}
-button:hover{
- background:linear-gradient(145deg,#c3e2ff,#9fcbff);
-}
-button:active{
- background:linear-gradient(145deg,#9fcbff,#7fb7f5);
 }
 .edit-on{
  background:linear-gradient(145deg,#a8d8ff,#7fc3ff);
@@ -145,6 +128,7 @@ button:active{
 
  <div id="imageArea">
   <div id="canvas"></div>
+  <svg id="lines"></svg>
   <div id="hits"></div>
  </div>
 </div>
@@ -175,12 +159,12 @@ let selected=null;
 let mode="my";
 let searchText="";
 
-/* ===== 요소 ===== */
 const hits=document.getElementById("hits");
 const list=document.getElementById("list");
 const canvas=document.getElementById("canvas");
 const search=document.getElementById("search");
 const imageArea=document.getElementById("imageArea");
+const lines=document.getElementById("lines");
 
 const editBtn=document.getElementById("editBtn");
 const bgBtn=document.getElementById("bgBtn");
@@ -191,35 +175,14 @@ const jsonIn=document.getElementById("jsonIn");
 const bgInput=document.getElementById("bgInput");
 const jsonFile=document.getElementById("jsonFile");
 
-/* ===== 탭 ===== */
-tabMy.onclick=()=>{
- mode="my"; items=myData;
- tabMy.classList.add("active");
- tabTpl.classList.remove("active");
- render();
-};
-tabTpl.onclick=()=>{
- mode="tpl"; items=tplData;
- tabTpl.classList.add("active");
- tabMy.classList.remove("active");
- render();
-};
+tabMy.onclick=()=>{mode="my";items=myData;tabMy.classList.add("active");tabTpl.classList.remove("active");render();}
+tabTpl.onclick=()=>{mode="tpl";items=tplData;tabTpl.classList.add("active");tabMy.classList.remove("active");render();}
 
-/* ===== 편집 ===== */
-editBtn.onclick=()=>{
- edit=!edit;
- editBtn.classList.toggle("edit-on",edit);
-};
+editBtn.onclick=()=>{edit=!edit;editBtn.classList.toggle("edit-on",edit);}
 
-/* ===== 검색 ===== */
-search.oninput=e=>{
- searchText=e.target.value.toLowerCase();
- render();
-};
+search.oninput=e=>{searchText=e.target.value.toLowerCase();render();}
 
-/* ===== 배경 ===== */
-bgBtn.onclick=()=>{ if(edit) bgInput.click(); };
-
+bgBtn.onclick=()=>{if(edit)bgInput.click();}
 bgInput.onchange=e=>{
  const f=e.target.files[0];
  const r=new FileReader();
@@ -232,7 +195,6 @@ bgInput.onchange=e=>{
 const bg=localStorage.getItem("bg");
 if(bg) canvas.style.backgroundImage=`url(${bg})`;
 
-/* ===== 추가 ===== */
 imageArea.ondblclick=e=>{
  if(!edit||mode!=="my")return;
  const r=imageArea.getBoundingClientRect();
@@ -241,55 +203,85 @@ imageArea.ondblclick=e=>{
   name:"항목",
   desc:"설명",
   x:(e.clientX-r.left)/r.width*100,
-  y:(e.clientY-r.top)/r.height*100
+  y:(e.clientY-r.top)/r.height*100,
+  lx:null,ly:null
  });
- save(); render();
+ save();render();
 };
 
-/* ===== 저장 ===== */
-function save(){
- localStorage.setItem("myData",JSON.stringify(myData));
-}
+function save(){localStorage.setItem("myData",JSON.stringify(myData));}
+function remove(id){myData=myData.filter(x=>x.id!==id);items=myData;save();render();}
 
-/* ===== 삭제 ===== */
-function remove(id){
- myData=myData.filter(x=>x.id!==id);
- items=myData;
- save();
- render();
-}
+/* ===== 드래그 ===== */
+let drag=null;
+document.addEventListener("mousemove",e=>{
+ if(!drag)return;
+ const r=imageArea.getBoundingClientRect();
+ drag.x=(e.clientX-r.left)/r.width*100;
+ drag.y=(e.clientY-r.top)/r.height*100;
+ save();render();
+});
+document.addEventListener("mouseup",()=>drag=null);
 
 /* ===== 렌더 ===== */
 function render(){
  hits.innerHTML="";
  list.innerHTML="";
+ lines.innerHTML="";
+ lines.setAttribute("width",imageArea.clientWidth);
+ lines.setAttribute("height",imageArea.clientHeight);
 
  let filtered=items.filter(it=>
-  it.name.toLowerCase().includes(searchText) ||
+  it.name.toLowerCase().includes(searchText)||
   it.desc.toLowerCase().includes(searchText)
  );
 
  filtered.forEach(it=>{
+  const hx=it.lx??it.x;
+  const hy=it.ly??it.y;
+
+  if(it.lx!==null){
+   const line=document.createElementNS("http://www.w3.org/2000/svg","line");
+   line.setAttribute("x1",it.x/100*imageArea.clientWidth);
+   line.setAttribute("y1",it.y/100*imageArea.clientHeight);
+   line.setAttribute("x2",it.lx/100*imageArea.clientWidth);
+   line.setAttribute("y2",it.ly/100*imageArea.clientHeight);
+   line.setAttribute("stroke","#444");
+   lines.appendChild(line);
+  }
+
   const d=document.createElement("div");
   d.className="hit"+(it.id===selected?" active":"");
-  d.style.left=it.x+"%";
-  d.style.top=it.y+"%";
+  d.style.left=hx+"%";
+  d.style.top=hy+"%";
   d.textContent=it.name;
+
+  d.onmousedown=e=>{
+   if(edit&&mode==="my"){drag=it;}
+  };
+
+  d.ondblclick=e=>{
+   if(edit&&mode==="my"){
+    if(it.lx===null){
+     it.lx=it.x+10;
+     it.ly=it.y+10;
+    }else{
+     it.lx=null;it.ly=null;
+    }
+    save();render();
+   }
+   e.stopPropagation();
+  };
 
   d.onclick=e=>{
    e.stopPropagation();
    if(edit&&mode==="my"){
     d.contentEditable=true;
     d.focus();
-    d.onblur=()=>{
-     d.contentEditable=false;
-     it.name=d.textContent;
-     save();
-    };
-   }else{
-    selected=it.id; render();
-   }
+    d.onblur=()=>{d.contentEditable=false;it.name=d.textContent;save();}
+   }else{selected=it.id;render();}
   };
+
   hits.appendChild(d);
 
   const li=document.createElement("li");
@@ -298,13 +290,9 @@ function render(){
   const del=document.createElement("span");
   del.className="del";
   del.textContent="✕";
-  del.onclick=e=>{
-   e.stopPropagation();
-   if(edit&&mode==="my") remove(it.id);
-  };
+  del.onclick=e=>{e.stopPropagation();if(edit&&mode==="my")remove(it.id);};
 
-  const t=document.createElement("div");
-  t.textContent=it.name;
+  const t=document.createElement("div");t.textContent=it.name;
 
   const det=document.createElement("div");
   det.className="detail";
@@ -316,15 +304,11 @@ function render(){
    if(edit&&mode==="my"){
     det.contentEditable=true;
     det.focus();
-    det.onblur=()=>{
-     det.contentEditable=false;
-     it.desc=det.textContent;
-     save();
-    };
+    det.onblur=()=>{det.contentEditable=false;it.desc=det.textContent;save();}
    }
   };
 
-  li.onclick=()=>{selected=it.id; render();};
+  li.onclick=()=>{selected=it.id;render();};
 
   li.appendChild(del);
   li.appendChild(t);
@@ -333,22 +317,16 @@ function render(){
  });
 }
 
-/* ===== 포커스 아웃 (복구) ===== */
-imageArea.addEventListener("click",e=>{
+/* ===== 포커스아웃 ===== */
+imageArea.onclick=e=>{
  if(!e.target.classList.contains("hit")){
-  selected=null;
-  render();
+  selected=null;render();
  }
-});
+};
+list.onclick=e=>{
+ if(e.target===list){selected=null;render();}
+};
 
-list.addEventListener("click",e=>{
- if(e.target===list){
-  selected=null;
-  render();
- }
-});
-
-/* ===== PNG ===== */
 pngBtn.onclick=()=>{
  html2canvas(imageArea).then(c=>{
   const a=document.createElement("a");
@@ -358,7 +336,6 @@ pngBtn.onclick=()=>{
  });
 };
 
-/* ===== JSON ===== */
 jsonOut.onclick=()=>{
  const blob=new Blob([JSON.stringify(myData)],{type:"application/json"});
  const a=document.createElement("a");
@@ -368,7 +345,6 @@ jsonOut.onclick=()=>{
 };
 
 jsonIn.onclick=()=>jsonFile.click();
-
 jsonFile.onchange=e=>{
  const f=e.target.files[0];
  const r=new FileReader();
