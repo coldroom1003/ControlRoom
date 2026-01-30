@@ -159,7 +159,6 @@ button{
  <button id="pngBtn">PNG</button>
  <button id="jsonOut">JSON↓</button>
  <button id="jsonIn">JSON↑</button>
- <label><input type="checkbox" id="transChk">투명</label>
 
  <input type="file" id="bgInput" hidden accept="image/*">
  <input type="file" id="jsonFile" hidden accept=".json">
@@ -187,7 +186,6 @@ const bgBtn=document.getElementById("bgBtn");
 const pngBtn=document.getElementById("pngBtn");
 const jsonOut=document.getElementById("jsonOut");
 const jsonIn=document.getElementById("jsonIn");
-const transChk=document.getElementById("transChk");
 
 const bgInput=document.getElementById("bgInput");
 const jsonFile=document.getElementById("jsonFile");
@@ -202,49 +200,43 @@ editBtn.onclick=()=>{edit=!edit;editBtn.classList.toggle("edit-on",edit);}
 /* 검색 */
 search.oninput=e=>{searchText=e.target.value.toLowerCase();render();}
 
+/* 배경 업로드 (복구) */
+bgBtn.onclick=()=>{ if(edit) bgInput.click(); };
+
+bgInput.onchange=e=>{
+ const f=e.target.files[0];
+ if(!f) return;
+ const r=new FileReader();
+ r.onload=()=>{
+  canvas.style.backgroundImage=`url(${r.result})`;
+  localStorage.setItem("bg",r.result);
+ };
+ r.readAsDataURL(f);
+};
+
+const savedBg=localStorage.getItem("bg");
+if(savedBg) canvas.style.backgroundImage=`url(${savedBg})`;
+
 /* 저장 */
 function save(){localStorage.setItem("myData",JSON.stringify(myData));}
 function remove(id){myData=myData.filter(x=>x.id!==id);items=myData;save();render();}
 
-/* ===== 터치 1회 추가 ===== */
-let lastTap=0;
-
+/* 터치 1회 추가 */
 imageArea.onpointerdown=e=>{
  if(!edit||mode!=="my")return;
  if(e.target.classList.contains("hit")||e.target.classList.contains("handle"))return;
 
  const r=imageArea.getBoundingClientRect();
 
- // 📱 터치면 즉시 추가
- if(e.pointerType==="touch"){
-  myData.push({
-   id:Date.now(),
-   name:"항목",
-   desc:"설명",
-   x:(e.clientX-r.left)/r.width*100,
-   y:(e.clientY-r.top)/r.height*100,
-   lx:null,ly:null,
-   transparent:false
-  });
-  save();render();
-  return;
- }
-
- // 💻 PC는 더블탭 유지
- const now=Date.now();
- if(now-lastTap<300){
-  myData.push({
-   id:Date.now(),
-   name:"항목",
-   desc:"설명",
-   x:(e.clientX-r.left)/r.width*100,
-   y:(e.clientY-r.top)/r.height*100,
-   lx:null,ly:null,
-   transparent:false
-  });
-  save();render();
- }
- lastTap=now;
+ myData.push({
+  id:Date.now(),
+  name:"항목",
+  desc:"설명",
+  x:(e.clientX-r.left)/r.width*100,
+  y:(e.clientY-r.top)/r.height*100,
+  lx:null,ly:null
+ });
+ save();render();
 };
 
 /* 드래그 */
@@ -257,12 +249,9 @@ document.addEventListener("pointermove",e=>{
  const x=(e.clientX-r.left)/r.width*100;
  const y=(e.clientY-r.top)/r.height*100;
 
- if(dragType==="item"){
-  if(dragItem.lx!==null){dragItem.lx=x;dragItem.ly=y;}
-  else{dragItem.x=x;dragItem.y=y;}
- }
- if(dragType==="end"){dragItem.lx=x;dragItem.ly=y;}
+ if(dragType==="item"){dragItem.x=x;dragItem.y=y;}
  if(dragType==="start"){dragItem.x=x;dragItem.y=y;}
+ if(dragType==="end"){dragItem.lx=x;dragItem.ly=y;}
 
  save();render();
 });
@@ -285,6 +274,7 @@ function render(){
   const hx=it.lx??it.x;
   const hy=it.ly??it.y;
 
+  /* 선 */
   if(it.lx!==null){
    const line=document.createElementNS("http://www.w3.org/2000/svg","line");
    line.setAttribute("x1",it.x/100*imageArea.clientWidth);
@@ -294,21 +284,39 @@ function render(){
    line.setAttribute("stroke","#444");
    line.setAttribute("stroke-width","2");
    lines.appendChild(line);
+
+   /* 시작 핸들 복구 */
+   const hs=document.createElement("div");
+   hs.className="handle";
+   hs.style.left=it.x+"%";
+   hs.style.top=it.y+"%";
+   hs.onpointerdown=e=>{dragItem=it;dragType="start";e.stopPropagation();}
+   hits.appendChild(hs);
+
+   /* 끝 핸들 복구 */
+   const he=document.createElement("div");
+   he.className="handle";
+   he.style.left=it.lx+"%";
+   he.style.top=it.ly+"%";
+   he.onpointerdown=e=>{dragItem=it;dragType="end";e.stopPropagation();}
+   hits.appendChild(he);
   }
 
   const d=document.createElement("div");
-  d.className="hit"+(it.id===selected?" active":"")+(it.transparent?" transparent":"");
+  d.className="hit";
   d.style.left=hx+"%";
   d.style.top=hy+"%";
   d.textContent=it.name;
 
-  /* 📱 롱프레스 화살표 */
+  d.onpointerdown=e=>{
+   if(edit&&mode==="my"){dragItem=it;dragType="item";}
+  };
+
+  /* 롱프레스 화살표 */
   let pressTimer=null;
   d.onpointerdown=e=>{
    if(edit&&mode==="my"){
     dragItem=it;dragType="item";
-    d.setPointerCapture(e.pointerId);
-
     if(e.pointerType==="touch"){
      pressTimer=setTimeout(()=>{
       if(it.lx===null){it.lx=it.x+10;it.ly=it.y+10;}
@@ -318,18 +326,7 @@ function render(){
     }
    }
   };
-
-  d.onpointerup=()=>{clearTimeout(pressTimer);}
-
-  /* 💻 PC 더블클릭 유지 */
-  d.ondblclick=e=>{
-   if(edit&&mode==="my"){
-    if(it.lx===null){it.lx=it.x+10;it.ly=it.y+10;}
-    else{it.lx=null;it.ly=null;}
-    save();render();
-   }
-   e.stopPropagation();
-  };
+  d.onpointerup=()=>clearTimeout(pressTimer);
 
   d.onclick=e=>{
    e.stopPropagation();
@@ -349,16 +346,11 @@ function render(){
   del.onclick=e=>{e.stopPropagation();if(edit&&mode==="my")remove(it.id);};
 
   const t=document.createElement("div");t.textContent=it.name;
-  const det=document.createElement("div");
-  det.className="detail";
-  det.textContent=it.desc;
-  if(it.id===selected) det.style.display="block";
 
   li.onclick=()=>{selected=it.id;render();};
 
   li.appendChild(del);
   li.appendChild(t);
-  li.appendChild(det);
   list.appendChild(li);
  });
 }
