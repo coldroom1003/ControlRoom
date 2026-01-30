@@ -142,179 +142,260 @@ li{
 <script type="module">
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm'
 
+// Supabase 설정
 const SUPABASE_URL = 'https://kpebsyuqtrvwbgbrvxoy.supabase.co'
 const SUPABASE_ANON_KEY = 'sb_publishable_aOx9dt3MyHESbd1T_CyQ3Q_ANSIepqb'
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 
-let items=[]
-let editMode=false
+let items = []
+let editMode = false
 
-const canvas=document.getElementById("canvas")
-const imageArea=document.getElementById("imageArea")
-const hitWrap=document.getElementById("hitAreas")
-const listEl=document.getElementById("itemList")
-const highlight=document.getElementById("highlight")
-const badge=document.getElementById("modeBadge")
-const editBtn=document.getElementById("editBtn")
-const searchBox=document.getElementById("searchBox")
-const imgInput=document.getElementById("imgInput")
-const clearImgBtn=document.getElementById("clearImgBtn")
-const imgBtn=document.getElementById("imgBtn")
-const exportBtn=document.getElementById("exportBtn")
+// DOM 요소
+const canvas = document.getElementById("canvas")
+const imageArea = document.getElementById("imageArea")
+const hitWrap = document.getElementById("hitAreas")
+const listEl = document.getElementById("itemList")
+const highlight = document.getElementById("highlight")
+const badge = document.getElementById("modeBadge")
+const editBtn = document.getElementById("editBtn")
+const searchBox = document.getElementById("searchBox")
+const imgInput = document.getElementById("imgInput")
+const clearImgBtn = document.getElementById("clearImgBtn")
+const imgBtn = document.getElementById("imgBtn")
+const exportBtn = document.getElementById("exportBtn")
 
-/* 편집모드 */
-editBtn.onclick=()=>{
-  editMode=!editMode
-  editBtn.classList.toggle("edit-on",editMode)
-  badge.style.display=editMode?"block":"none"
+/* 1. 편집모드 토글 */
+editBtn.onclick = () => {
+  editMode = !editMode
+  editBtn.classList.toggle("edit-on", editMode)
+  badge.style.display = editMode ? "block" : "none"
 }
 
-/* 이미지 업로드 */
-imgBtn.onclick=()=>{ if(!editMode)return; imgInput.click() }
-
-imgInput.onchange=async e=>{
-  if(!editMode) return
-  const f=e.target.files[0]
-  if(!f)return
-  const fileName=`bg_${Date.now()}_${f.name}`
-  const { data, error } = await supabase.storage.from('backgrounds').upload(fileName,f)
-  if(error){alert(error.message);return}
-  const { data: urlData } = supabase.storage.from('backgrounds').getPublicUrl(fileName)
-  canvas.style.background=`url(${urlData.publicUrl}) center/contain no-repeat`
+/* 2. 이미지 업로드 (핵심 수정 부분) */
+imgBtn.onclick = () => { 
+  if (!editMode) return
+  imgInput.click() 
 }
 
-/* 이미지 초기화 */
-clearImgBtn.onclick=()=>{ if(!editMode) return; canvas.style.background="" }
+imgInput.onchange = async (e) => {
+  if (!editMode) return
+  const file = e.target.files[0]
+  if (!file) return
 
-/* 저장 */
-const save=it=>supabase.from('items').upsert(it)
+  // 버튼 상태 변경 (로딩 표시)
+  const originalText = imgBtn.innerText
+  imgBtn.innerText = "⏳"
 
-/* 삭제 */
-async function remove(id){
-  await supabase.from('items').delete().eq('id',id)
-  items=items.filter(i=>i.id!==id)
+  try {
+    const fileName = `bg_${Date.now()}_${file.name}`
+    
+    // Supabase Storage 업로드
+    const { data, error } = await supabase.storage
+      .from('backgrounds')
+      .upload(fileName, file)
+
+    if (error) throw error
+
+    // 공용 URL 획득
+    const { data: urlData } = supabase.storage
+      .from('backgrounds')
+      .getPublicUrl(fileName)
+
+    const publicUrl = urlData.publicUrl
+
+    // PC/모바일 호환성을 위해 backgroundImage 스타일을 명시적으로 지정
+    canvas.style.backgroundImage = `url('${publicUrl}')`
+    canvas.style.backgroundSize = "contain"
+    canvas.style.backgroundPosition = "center"
+    canvas.style.backgroundRepeat = "no-repeat"
+
+    alert("배경 이미지가 업데이트되었습니다.")
+  } catch (err) {
+    console.error("Upload failed:", err)
+    alert("업로드 실패: " + err.message)
+  } finally {
+    imgBtn.innerText = originalText
+    imgInput.value = "" // 파일 input 초기화 (같은 파일 재업로드 가능하게)
+  }
+}
+
+/* 3. 이미지 초기화 */
+clearImgBtn.onclick = () => { 
+  if (!editMode) return
+  if (confirm("배경 이미지를 삭제하시겠습니까?")) {
+    canvas.style.backgroundImage = "" 
+  }
+}
+
+/* 4. 데이터 저장/삭제/로드 */
+const save = it => supabase.from('items').upsert(it)
+
+async function remove(id) {
+  if (!confirm("정말 삭제하시겠습니까?")) return
+  await supabase.from('items').delete().eq('id', id)
+  items = items.filter(i => i.id !== id)
   render()
 }
 
-/* 편집 */
-function makeEditable(el,onSave){
-  el.contentEditable=true
-  el.focus()
-  el.onblur=()=>{el.contentEditable=false;onSave(el.innerText)}
+async function loadItems() {
+  const { data, error } = await supabase.from('items').select('*')
+  if (error) {
+    console.error("Load failed:", error)
+    return
+  }
+  items = data || []
+  render()
 }
 
-/* 렌더 */
-function render(){renderHits();renderList()}
+/* 5. 편집 UI 관련 함수 */
+function makeEditable(el, onSave) {
+  el.contentEditable = true
+  el.focus()
+  el.onblur = () => {
+    el.contentEditable = false
+    onSave(el.innerText)
+  }
+  // 엔터 키 입력 시 저장
+  el.onkeydown = (e) => { if(e.key === 'Enter') el.blur() }
+}
 
-/* 라벨 */
-function renderHits(){
-  hitWrap.innerHTML=""
-  items.forEach(it=>{
-    const d=document.createElement("div")
-    d.className="hit-area"
-    d.style.left=it.x+"%"
-    d.style.top=it.y+"%"
+/* 6. 렌더링 함수 */
+function render() {
+  renderHits()
+  renderList()
+}
 
-    const t=document.createElement("div")
-    t.className="hit-title"
-    t.innerText=it.name
-    t.ondblclick=e=>{if(!editMode)return; e.stopPropagation(); makeEditable(t,v=>{it.name=v;save(it);render()})}
-    d.onclick=e=>{e.stopPropagation(); select(it,true)}
+function renderHits() {
+  hitWrap.innerHTML = ""
+  items.forEach(it => {
+    const d = document.createElement("div")
+    d.className = "hit-area"
+    d.style.left = it.x + "%"
+    d.style.top = it.y + "%"
+
+    const t = document.createElement("div")
+    t.className = "hit-title"
+    t.innerText = it.name
+    
+    t.ondblclick = e => {
+      if (!editMode) return
+      e.stopPropagation()
+      makeEditable(t, v => { it.name = v; save(it); render() })
+    }
+    
+    d.onclick = e => {
+      e.stopPropagation()
+      select(it, true)
+    }
+    
     d.appendChild(t)
     hitWrap.appendChild(d)
   })
 }
 
-/* 리스트 */
-function renderList(){
-  listEl.innerHTML=""
-  const q=searchBox.value.toLowerCase()
-  const filtered=items.filter(i=>(i.name||"").toLowerCase().includes(q) || (i.desc||"").toLowerCase().includes(q))
-  filtered.forEach(it=>{
-    const li=document.createElement("li")
-    const del=document.createElement("span")
-    del.innerText="✖"
-    del.className="del-btn"
-    del.onclick=e=>{e.stopPropagation();if(editMode)remove(it.id)}
+function renderList() {
+  listEl.innerHTML = ""
+  const q = searchBox.value.toLowerCase()
+  const filtered = items.filter(i => 
+    (i.name || "").toLowerCase().includes(q) || 
+    (i.desc || "").toLowerCase().includes(q)
+  )
 
-    const title=document.createElement("div")
-    title.innerText=it.name
-    title.ondblclick=e=>{if(!editMode)return; makeEditable(title,v=>{it.name=v;save(it);render()})}
+  filtered.forEach(it => {
+    const li = document.createElement("li")
+    li.dataset.id = it.id // 식별용 ID 부여
 
-    const detail=document.createElement("div")
-    detail.className="detail"
-    detail.innerText=it.desc||"설명"
-    detail.ondblclick=e=>{if(!editMode)return; makeEditable(detail,v=>{it.desc=v;save(it)})}
+    const del = document.createElement("span")
+    del.innerText = "✖"
+    del.className = "del-btn"
+    del.onclick = e => { e.stopPropagation(); if (editMode) remove(it.id) }
 
-    li.onclick=()=>{
-      document.querySelectorAll(".detail").forEach(d=>d.style.display="none")
-      detail.style.display="block"
-      select(it,false)
+    const title = document.createElement("div")
+    title.innerText = it.name
+    title.ondblclick = e => { 
+      if (!editMode) return
+      makeEditable(title, v => { it.name = v; save(it); render() })
     }
 
-    li.append(del,title,detail)
+    const detail = document.createElement("div")
+    detail.className = "detail"
+    detail.innerText = it.desc || "설명"
+    detail.ondblclick = e => { 
+      if (!editMode) return
+      makeEditable(detail, v => { it.desc = v; save(it) })
+    }
+
+    li.onclick = () => {
+      document.querySelectorAll(".detail").forEach(d => d.style.display = "none")
+      detail.style.display = "block"
+      select(it, false)
+    }
+
+    li.append(del, title, detail)
     listEl.appendChild(li)
   })
 }
 
-/* 선택 */
-function select(it,openList){
-  highlight.style.left=it.x+"%"
-  highlight.style.top=it.y+"%"
-  highlight.style.display="block"
-  if(openList){
-    const idx=items.indexOf(it)
-    const li=listEl.children[idx]
-    if(li){const d=li.querySelector(".detail"); document.querySelectorAll(".detail").forEach(x=>x.style.display="none"); d.style.display="block"}
+/* 7. 선택 및 하이라이트 */
+function select(it, openList) {
+  highlight.style.left = it.x + "%"
+  highlight.style.top = it.y + "%"
+  highlight.style.display = "block"
+
+  if (openList) {
+    // 리스트에서 해당 항목 찾아서 상세 펼치기
+    const listItems = listEl.querySelectorAll("li")
+    listItems.forEach(li => {
+      const d = li.querySelector(".detail")
+      if (li.innerText.includes(it.name)) { // 이름으로 매칭
+        d.style.display = "block"
+        li.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+      } else {
+        d.style.display = "none"
+      }
+    })
   }
 }
 
-/* 빈공간 클릭 해제 */
-imageArea.addEventListener("click",e=>{
-  if(editMode)return
-  if(!e.target.closest(".hit-area")){
-    highlight.style.display="none"
-    document.querySelectorAll(".detail").forEach(d=>d.style.display="none")
+/* 8. 기타 이벤트 */
+imageArea.onclick = e => {
+  if (editMode) return
+  if (!e.target.closest(".hit-area")) {
+    highlight.style.display = "none"
+    document.querySelectorAll(".detail").forEach(d => d.style.display = "none")
   }
-})
+}
 
-/* 추가 */
-imageArea.ondblclick=e=>{
-  if(!editMode)return
-  const r=imageArea.getBoundingClientRect()
-  const it={
-    id:Date.now(),
-    name:"새 물건",
-    x:(e.clientX-r.left)/r.width*100,
-    y:(e.clientY-r.top)/r.height*100,
-    desc:"설명"
+imageArea.ondblclick = e => {
+  if (!editMode) return
+  const r = imageArea.getBoundingClientRect()
+  const it = {
+    id: Date.now(),
+    name: "새 물건",
+    x: (e.clientX - r.left) / r.width * 100,
+    y: (e.clientY - r.top) / r.height * 100,
+    desc: "설명을 입력하세요"
   }
   items.push(it)
   save(it)
   render()
 }
 
-/* 검색 */
-searchBox.oninput=renderList
+searchBox.oninput = renderList
 
-/* 내보내기 */
-exportBtn.onclick=async ()=>{
-  if(editMode){alert("뷰어모드에서만 내보내기 가능"); return}
-  const include=document.getElementById("includeList").checked
-  const target=include ? document.getElementById("captureRoot") : document.getElementById("imageArea")
-  const canvasCap=await html2canvas(target)
-  const link=document.createElement("a")
-  link.download="map.png"
-  link.href=canvasCap.toDataURL("image/png")
+exportBtn.onclick = async () => {
+  if (editMode) { alert("뷰어모드에서만 내보내기 가능"); return }
+  const include = document.getElementById("includeList").checked
+  const target = include ? document.getElementById("captureRoot") : document.getElementById("imageArea")
+  
+  const canvasCap = await html2canvas(target, { useCORS: true }) // 외부 이미지 캡쳐를 위해 CORS 허용
+  const link = document.createElement("a")
+  link.download = `map_${Date.now()}.png`
+  link.href = canvasCap.toDataURL("image/png")
   link.click()
 }
 
-/* 로드 */
-async function loadItems(){
-  const { data, error } = await supabase.from('items').select('*')
-  items=data||[{id:1,name:"예시",x:50,y:50,desc:"설명"}]
-  render()
-}
+// 초기 로드
 loadItems()
 </script>
 </body>
