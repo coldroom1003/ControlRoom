@@ -4,20 +4,19 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
 
-<style>
-body{margin:0;font-family:sans-serif;display:flex;height:100vh;overflow:hidden}
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 
-/* 상태별 테두리 */
+<style>
+body{margin:0;display:flex;height:100vh;font-family:sans-serif}
+
+/* 그림 */
 #imageArea{
  flex:8;
  position:relative;
  background:#eee;
  border:4px solid #999;
- transition:.2s;
 }
-#imageArea.template{
- border-color:#4a90e2;
-}
+#imageArea.template{border-color:#4a90e2;}
 
 #canvas{
  width:100%;height:100%;
@@ -25,8 +24,6 @@ body{margin:0;font-family:sans-serif;display:flex;height:100vh;overflow:hidden}
  background-position:center;
  background-repeat:no-repeat;
 }
-
-#hitWrap{position:absolute;inset:0}
 
 .hit-area{
  position:absolute;
@@ -36,14 +33,13 @@ body{margin:0;font-family:sans-serif;display:flex;height:100vh;overflow:hidden}
 
 .hit-title{
  background:#fffdf5;
- border:1px solid rgba(0,0,0,.3);
- border-radius:12px;
- padding:5px 10px;
- font-size:14px;
+ border:1px solid rgba(0,0,0,.4);
+ padding:6px 10px;
+ border-radius:10px;
 }
 
-/* 형광펜 */
-.hit-title.focused{
+/* 형광펜 포커스 */
+.focused{
  background:linear-gradient(
   to top,
   rgba(255,255,0,.6) 40%,
@@ -51,6 +47,7 @@ body{margin:0;font-family:sans-serif;display:flex;height:100vh;overflow:hidden}
  );
 }
 
+/* 사이드 */
 #side{
  flex:2;
  border-left:1px solid #ccc;
@@ -58,66 +55,41 @@ body{margin:0;font-family:sans-serif;display:flex;height:100vh;overflow:hidden}
  flex-direction:column;
 }
 
-#statusBar{
+#status{
+ padding:6px;
  font-size:12px;
- padding:4px 8px;
- background:#f5f5f5;
- border-bottom:1px solid #ddd;
+ background:#f3f3f3;
 }
-
-#templateLabel{
- position:absolute;
- top:8px;
- left:50%;
- transform:translateX(-50%);
- background:rgba(0,0,0,.6);
- color:white;
- padding:4px 10px;
- border-radius:12px;
- font-size:12px;
- display:none;
-}
-
-#tabs{display:flex;border-bottom:1px solid #ccc}
-.tab{flex:1;padding:8px;text-align:center;cursor:pointer;background:#f5f5f5}
-.tab.active{background:#fff;font-weight:bold}
 
 ul{list-style:none;margin:0;padding:0;overflow:auto;flex:1}
 li{padding:8px;border-bottom:1px solid #eee;cursor:pointer}
 li.active{background:#f0f0f0}
 
-.detail{display:none;color:#555}
+.detail{display:none;font-size:13px;color:#555}
 
 #topbar{
  position:fixed;
  bottom:10px;
  left:10px;
  background:#fff;
- padding:5px;
- border-radius:8px;
+ padding:6px;
+ border-radius:10px;
  box-shadow:0 2px 6px rgba(0,0,0,.2);
 }
 button{margin:2px}
-.edit-on{background:#4caf50;color:#fff}
+.edit-on{background:#4caf50;color:white}
 </style>
 </head>
 
 <body>
 
 <div id="imageArea">
- <div id="templateLabel"></div>
  <div id="canvas"></div>
  <div id="hitWrap"></div>
 </div>
 
 <div id="side">
- <div id="statusBar">📁 내 작업</div>
-
- <div id="tabs">
-  <div class="tab active" id="tabWork">내 작업</div>
-  <div class="tab" id="tabTemplates">템플릿</div>
- </div>
-
+ <div id="status">📁 내 작업</div>
  <ul id="list"></ul>
 </div>
 
@@ -125,49 +97,48 @@ button{margin:2px}
  <button id="editBtn">편집</button>
  <button id="imgBtn">배경</button>
  <button id="pngBtn">PNG</button>
- <button id="exportBtn">JSON</button>
- <button id="importBtn">불러오기</button>
+ <button id="saveTplBtn">템플릿저장</button>
+ <button id="loadTplBtn">템플릿불러오기</button>
+ <button id="copyBtn">내작업복사</button>
 
  <input type="file" id="imgInput" hidden accept="image/*">
  <input type="file" id="jsonInput" hidden accept=".json">
 </div>
 
 <script>
-const imageArea=imageArea=document.getElementById("imageArea");
+/* 요소 */
+const imageArea=document.getElementById("imageArea");
 const canvas=document.getElementById("canvas");
 const hitWrap=document.getElementById("hitWrap");
 const list=document.getElementById("list");
+const statusBar=document.getElementById("status");
 
 const editBtn=document.getElementById("editBtn");
 const imgBtn=document.getElementById("imgBtn");
 const pngBtn=document.getElementById("pngBtn");
-const exportBtn=document.getElementById("exportBtn");
-const importBtn=document.getElementById("importBtn");
+const saveTplBtn=document.getElementById("saveTplBtn");
+const loadTplBtn=document.getElementById("loadTplBtn");
+const copyBtn=document.getElementById("copyBtn");
 
 const imgInput=document.getElementById("imgInput");
 const jsonInput=document.getElementById("jsonInput");
 
-const tabWork=document.getElementById("tabWork");
-const tabTemplates=document.getElementById("tabTemplates");
-
-const statusBar=document.getElementById("statusBar");
-const templateLabel=document.getElementById("templateLabel");
-
-let items=JSON.parse(localStorage.getItem("mapData")||"[]");
-let myItems=[...items];
+/* 데이터 */
+let myItems=JSON.parse(localStorage.getItem("mapData")||"[]");
 let templates=JSON.parse(localStorage.getItem("templates")||"[]");
 
+let items=myItems;
 let editMode=false;
-let selectedId=null;
-let currentTab="work";
-let viewingTemplate=null;
+let selected=null;
+let viewingTemplate=false;
 
+/* 저장 */
 function save(){
  localStorage.setItem("mapData",JSON.stringify(myItems));
  localStorage.setItem("templates",JSON.stringify(templates));
 }
 
-/* 편집 */
+/* 편집모드 */
 editBtn.onclick=()=>{
  editMode=!editMode;
  editBtn.classList.toggle("edit-on",editMode);
@@ -175,44 +146,40 @@ editBtn.onclick=()=>{
 
 /* 배경 */
 imgBtn.onclick=()=>{ if(editMode) imgInput.click(); };
+
 imgInput.onchange=e=>{
  const f=e.target.files[0];
  if(!f) return;
  const r=new FileReader();
  r.onload=()=>{
   canvas.style.backgroundImage=`url(${r.result})`;
-  localStorage.setItem("bgImg",r.result);
+  localStorage.setItem("bg",r.result);
  };
  r.readAsDataURL(f);
 };
-const bg=localStorage.getItem("bgImg");
+const bg=localStorage.getItem("bg");
 if(bg) canvas.style.backgroundImage=`url(${bg})`;
 
-/* 탭 */
-tabWork.onclick=()=>{
- currentTab="work";
- viewingTemplate=null;
- items=myItems;
+/* 추가 */
+imageArea.ondblclick=e=>{
+ if(!editMode||viewingTemplate) return;
 
- imageArea.classList.remove("template");
- templateLabel.style.display="none";
- statusBar.innerText="📁 내 작업";
-
- tabWork.classList.add("active");
- tabTemplates.classList.remove("active");
- render();
-};
-
-tabTemplates.onclick=()=>{
- currentTab="templates";
- tabTemplates.classList.add("active");
- tabWork.classList.remove("active");
+ const r=imageArea.getBoundingClientRect();
+ items.push({
+  id:Date.now(),
+  name:"항목",
+  desc:"설명",
+  x:(e.clientX-r.left)/r.width*100,
+  y:(e.clientY-r.top)/r.height*100
+ });
+ myItems=items;
+ save();
  render();
 };
 
 /* 선택 */
 function select(it){
- selectedId=it.id;
+ selected=it.id;
  render();
 }
 
@@ -221,34 +188,15 @@ function render(){
  hitWrap.innerHTML="";
  list.innerHTML="";
 
- if(currentTab==="templates"){
-  templates.forEach(t=>{
-   const li=document.createElement("li");
-   li.textContent="📂 "+t.name;
-   li.onclick=()=>{
-    viewingTemplate=t.name;
-    items=t.data;
-
-    imageArea.classList.add("template");
-    templateLabel.style.display="block";
-    templateLabel.innerText="템플릿: "+t.name;
-    statusBar.innerText="📂 템플릿 보기";
-
-    render();
-   };
-   list.appendChild(li);
-  });
-  return;
- }
-
  items.forEach(it=>{
+  /* 그림 라벨 */
   const d=document.createElement("div");
   d.className="hit-area";
   d.style.left=it.x+"%";
   d.style.top=it.y+"%";
 
   const t=document.createElement("div");
-  t.className="hit-title"+(it.id===selectedId?" focused":"");
+  t.className="hit-title"+(it.id===selected?" focused":"");
   t.textContent=it.name;
 
   t.onclick=e=>{
@@ -259,10 +207,7 @@ function render(){
     t.onblur=()=>{
      t.contentEditable=false;
      it.name=t.textContent;
-     if(!viewingTemplate){
-      myItems=items;
-      save();
-     }
+     if(!viewingTemplate){myItems=items;save();}
     };
    }else select(it);
   };
@@ -270,14 +215,17 @@ function render(){
   d.appendChild(t);
   hitWrap.appendChild(d);
 
+  /* 리스트 */
   const li=document.createElement("li");
-  li.className=it.id===selectedId?"active":"";
-  li.innerHTML="<b>"+it.name+"</b>";
+  if(it.id===selected) li.className="active";
+
+  const title=document.createElement("div");
+  title.textContent=it.name;
 
   const det=document.createElement("div");
   det.className="detail";
   det.textContent=it.desc||"";
-  if(it.id===selectedId) det.style.display="block";
+  if(it.id===selected) det.style.display="block";
 
   det.onclick=e=>{
    e.stopPropagation();
@@ -287,39 +235,19 @@ function render(){
    det.onblur=()=>{
     det.contentEditable=false;
     it.desc=det.textContent;
-    if(!viewingTemplate){
-     myItems=items;
-     save();
-    }
+    if(!viewingTemplate){myItems=items;save();}
    };
   };
 
   li.onclick=()=>select(it);
 
+  li.appendChild(title);
   li.appendChild(det);
   list.appendChild(li);
  });
 }
 
-/* 추가 */
-imageArea.ondblclick=e=>{
- if(!editMode||viewingTemplate) return;
- const r=imageArea.getBoundingClientRect();
-
- items.push({
-  id:Date.now(),
-  name:"항목",
-  desc:"설명",
-  x:(e.clientX-r.left)/r.width*100,
-  y:(e.clientY-r.top)/r.height*100
- });
-
- myItems=items;
- save();
- render();
-};
-
-/* PNG (화면 기준) */
+/* PNG */
 pngBtn.onclick=()=>{
  html2canvas(imageArea).then(c=>{
   const a=document.createElement("a");
@@ -329,33 +257,47 @@ pngBtn.onclick=()=>{
  });
 };
 
-/* JSON */
-exportBtn.onclick=()=>{
- const data={name:"템플릿",data:myItems};
- const blob=new Blob([JSON.stringify(data)],{type:"application/json"});
- const a=document.createElement("a");
- a.href=URL.createObjectURL(blob);
- a.download="map.json";
- a.click();
+/* 템플릿 저장 */
+saveTplBtn.onclick=()=>{
+ const name=prompt("템플릿 이름?");
+ if(!name) return;
+ templates.push({name,data:myItems});
+ save();
+ alert("저장됨");
 };
 
-importBtn.onclick=()=>jsonInput.click();
+/* 템플릿 불러오기 */
+loadTplBtn.onclick=()=>jsonInput.click();
+
 jsonInput.onchange=e=>{
  const f=e.target.files[0];
  if(!f) return;
  const r=new FileReader();
  r.onload=()=>{
-  templates.push(JSON.parse(r.result));
-  save();
-  alert("템플릿 저장됨");
+  const t=JSON.parse(r.result);
+  items=t.data;
+  viewingTemplate=true;
+  imageArea.classList.add("template");
+  statusBar.innerText="📂 템플릿 보기";
+  render();
  };
  r.readAsText(f);
 };
 
+/* 템플릿 → 내작업 복사 */
+copyBtn.onclick=()=>{
+ if(!viewingTemplate) return alert("템플릿 상태에서만 가능");
+ myItems=JSON.parse(JSON.stringify(items));
+ items=myItems;
+ viewingTemplate=false;
+ imageArea.classList.remove("template");
+ statusBar.innerText="📁 내 작업";
+ save();
+ render();
+};
+
 render();
 </script>
-
-<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 
 </body>
 </html>
