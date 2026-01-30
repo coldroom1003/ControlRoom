@@ -156,12 +156,19 @@ if(savedBg) canvas.style.backgroundImage=`url(${savedBg})`;
 
 /* ---------------- 선택 ---------------- */
 
+function closeAllDetails(){
+ document.querySelectorAll(".detail").forEach(d=>{
+  d.style.display="none";
+ });
+}
+
 function clearSelection(){
  selectedId=null;
  highlight.style.display="none";
  document.querySelectorAll("li").forEach(li=>{
   li.classList.remove("active");
  });
+ closeAllDetails();
 }
 
 function select(it){
@@ -175,8 +182,7 @@ function select(it){
   li.classList.toggle("active",li.dataset.id==it.id);
  });
 
- /* 리스트 토글 열기 */
- document.querySelectorAll(".detail").forEach(d=>d.style.display="none");
+ closeAllDetails();
  const li=document.querySelector(`li[data-id="${it.id}"]`);
  if(li){
   const det=li.querySelector(".detail");
@@ -206,13 +212,20 @@ function render(){
   t.className="hit-title";
   t.innerText=it.name;
 
-  /* ✅ 한번 클릭 수정 (편집모드) */
+  /* ✅ 바로 수정 */
   t.onclick=(e)=>{
    e.stopPropagation();
 
    if(editMode){
-    const v=prompt("이름",it.name);
-    if(v){it.name=v;autoSave();render();}
+    t.contentEditable=true;
+    t.focus();
+
+    t.onblur=()=>{
+     t.contentEditable=false;
+     it.name=t.innerText.trim()||"이름";
+     autoSave();
+     render();
+    };
     return;
    }
 
@@ -225,18 +238,43 @@ function render(){
   /* 리스트 */
   const li=document.createElement("li");
   li.dataset.id=it.id;
-  li.innerHTML="<b>"+it.name+"</b>";
+
+  const title=document.createElement("b");
+  title.innerText=it.name;
+
+  /* 제목도 바로 수정 */
+  title.onclick=(e)=>{
+   e.stopPropagation();
+   if(!editMode)return;
+
+   title.contentEditable=true;
+   title.focus();
+
+   title.onblur=()=>{
+    title.contentEditable=false;
+    it.name=title.innerText.trim()||"이름";
+    autoSave();
+    render();
+   };
+  };
 
   const det=document.createElement("div");
   det.className="detail";
   det.innerText=it.desc;
 
-  /* ✅ 설명 한번 클릭 수정 */
+  /* ✅ 설명 바로 수정 */
   det.onclick=(e)=>{
    e.stopPropagation();
    if(!editMode)return;
-   const v=prompt("설명",it.desc);
-   if(v){it.desc=v;autoSave();render();}
+
+   det.contentEditable=true;
+   det.focus();
+
+   det.onblur=()=>{
+    det.contentEditable=false;
+    it.desc=det.innerText.trim()||"";
+    autoSave();
+   };
   };
 
   li.onclick=(e)=>{
@@ -244,6 +282,7 @@ function render(){
    select(it);
   };
 
+  li.appendChild(title);
   li.appendChild(det);
   list.appendChild(li);
  });
