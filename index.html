@@ -8,7 +8,6 @@
 <style>
 body{margin:0;display:flex;height:100vh;font-family:sans-serif;}
 #left{flex:8;display:flex;flex-direction:column}
-
 .tabs{display:flex;height:36px;background:#eef5fb}
 .tab{flex:1;display:flex;align-items:center;justify-content:center;cursor:pointer}
 .tab.active{background:white;font-weight:bold}
@@ -39,18 +38,13 @@ body{margin:0;display:flex;height:100vh;font-family:sans-serif;}
 }
 
 #side{flex:2;border-left:1px solid #d6e2ee;display:flex;flex-direction:column;}
+#search{padding:6px;border:none;border-bottom:1px solid #ddd;}
 ul{list-style:none;margin:0;padding:0;flex:1;overflow:auto}
 li{padding:8px;border-bottom:1px solid #eee;cursor:pointer}
 li.active{background:#eaf4ff}
 
 .detail{display:none;font-size:13px;color:#666;margin-top:4px}
-
-.del{
- float:right;
- font-weight:300;
- cursor:pointer;
- opacity:.6;
-}
+.del{float:right;cursor:pointer;opacity:.6}
 .del:hover{opacity:1}
 
 #bar{position:fixed;bottom:10px;left:10px;background:white;padding:8px;border-radius:12px;}
@@ -75,6 +69,7 @@ button{margin:2px;padding:6px 12px;}
 </div>
 
 <div id="side">
+<input id="search" placeholder="검색...">
 <ul id="list"></ul>
 </div>
 
@@ -94,19 +89,29 @@ let myData=JSON.parse(localStorage.getItem("myData")||"[]");
 let tplData=[];
 let items=myData;
 
-let edit=false,selected=null,mode="my";
+let edit=false,selected=null,mode="my",searchText="";
 
 const hits=document.getElementById("hits");
 const list=document.getElementById("list");
 const canvas=document.getElementById("canvas");
 const lines=document.getElementById("lines");
 const imageArea=document.getElementById("imageArea");
+const search=document.getElementById("search");
 
 function save(){localStorage.setItem("myData",JSON.stringify(myData));}
-function remove(id){myData=myData.filter(x=>x.id!==id);items=myData;save();render();}
+
+/* 검색 */
+search.oninput=e=>{
+ searchText=e.target.value.toLowerCase();
+ render();
+};
 
 /* 편집모드 */
-editBtn.onclick=()=>{edit=!edit;editBtn.classList.toggle("edit-on",edit);}
+editBtn.onclick=()=>{
+ edit=!edit;
+ editBtn.classList.toggle("edit-on",edit);
+ render();
+};
 
 /* 배경 */
 bgBtn.onclick=()=>{if(edit)bgInput.click();}
@@ -119,31 +124,22 @@ bgInput.onchange=e=>{
 const bg=localStorage.getItem("bg");
 if(bg) canvas.style.backgroundImage=`url(${bg})`;
 
-/* 배경 클릭 새 항목 */
-imageArea.onclick=e=>{
- if(e.target!==canvas||!edit||mode!=="my")return;
- const r=imageArea.getBoundingClientRect();
- myData.push({
-  id:Date.now(),
-  name:"항목",
-  desc:"설명",
-  x:(e.clientX-r.left)/r.width*100,
-  y:(e.clientY-r.top)/r.height*100,
-  lx:null,ly:null
- });
+/* 더블탭 안정화 */
+function handleDoubleTap(it){
+ if(it.lx==null){it.lx=it.x+10;it.ly=it.y+10;}
+ else{it.lx=null;it.ly=null;}
  save();render();
-};
+}
 
 /* 드래그 */
 let dragItem=null,dragType=null;
-
 document.addEventListener("pointermove",e=>{
  if(!dragItem||!edit)return;
  const r=imageArea.getBoundingClientRect();
  const x=(e.clientX-r.left)/r.width*100;
  const y=(e.clientY-r.top)/r.height*100;
 
- if(dragType==="item"){dragItem.lx!==null?(dragItem.lx=x,dragItem.ly=y):(dragItem.x=x,dragItem.y=y);}
+ if(dragType==="item"){dragItem.lx!=null?(dragItem.lx=x,dragItem.ly=y):(dragItem.x=x,dragItem.y=y);}
  if(dragType==="start"){dragItem.x=x;dragItem.y=y;}
  if(dragType==="end"){dragItem.lx=x;dragItem.ly=y;}
 
@@ -151,20 +147,23 @@ document.addEventListener("pointermove",e=>{
 });
 document.addEventListener("pointerup",()=>dragItem=null);
 
-/* 더블탭 감지 */
-let lastTap=0;
-
 /* 렌더 */
 function render(){
- hits.innerHTML=""; list.innerHTML=""; lines.innerHTML="";
+ hits.innerHTML="";list.innerHTML="";lines.innerHTML="";
  lines.setAttribute("width",imageArea.clientWidth);
  lines.setAttribute("height",imageArea.clientHeight);
 
- items.forEach(it=>{
+ let filtered=items.filter(it=>
+  it.name.toLowerCase().includes(searchText)||
+  it.desc.toLowerCase().includes(searchText)
+ );
+
+ filtered.forEach(it=>{
   const hx=it.lx??it.x;
   const hy=it.ly??it.y;
 
-  if(it.lx!==null){
+  /* 선 */
+  if(it.lx!=null){
    const line=document.createElementNS("http://www.w3.org/2000/svg","line");
    line.setAttribute("x1",it.x/100*imageArea.clientWidth);
    line.setAttribute("y1",it.y/100*imageArea.clientHeight);
@@ -177,8 +176,8 @@ function render(){
    ["start","end"].forEach(type=>{
     const h=document.createElement("div");
     h.className="handle";
-    h.style.left=(type==="start"?it.x:it.lx)+"%";
-    h.style.top=(type==="start"?it.y:it.ly)+"%";
+    h.style.left=(type=="start"?it.x:it.lx)+"%";
+    h.style.top=(type=="start"?it.y:it.ly)+"%";
     h.onpointerdown=e=>{
      if(!edit)return;
      dragItem=it;dragType=type;e.stopPropagation();
@@ -187,55 +186,65 @@ function render(){
    });
   }
 
+  /* 항목 */
   const d=document.createElement("div");
-  d.className="hit"+(it.id===selected?" active":"");
+  d.className="hit"+(it.id==selected?" active":"");
   d.style.left=hx+"%";
   d.style.top=hy+"%";
   d.textContent=it.name;
+
+  let lastTap=0;
 
   d.onpointerdown=e=>{
    e.stopPropagation();
    selected=it.id;
 
-   if(edit){
-    dragItem=it;dragType="item";
-   }
+   if(edit){dragItem=it;dragType="item";}
 
    const now=Date.now();
-   if(now-lastTap<300){
-    if(it.lx===null){it.lx=it.x+10;it.ly=it.y+10;}
-    else{it.lx=null;it.ly=null;}
-    save();render();
-   }
+   if(now-lastTap<300) handleDoubleTap(it);
    lastTap=now;
+
+   render();
   };
 
   hits.appendChild(d);
 
   /* 리스트 */
   const li=document.createElement("li");
-  if(it.id===selected) li.className="active";
+  if(it.id==selected) li.className="active";
 
-  const del=document.createElement("span");
-  del.className="del";
-  del.textContent="✕";
   if(edit){
-   del.onclick=e=>{e.stopPropagation();remove(it.id);}
+   const del=document.createElement("span");
+   del.className="del";
+   del.textContent="✕";
+   del.onclick=e=>{
+    e.stopPropagation();
+    myData=myData.filter(x=>x.id!=it.id);
+    items=myData;
+    save();render();
+   };
    li.appendChild(del);
   }
 
   const title=document.createElement("div");
   title.textContent=it.name;
-  if(edit) title.contentEditable=true;
-  title.oninput=()=>{it.name=title.textContent;save();};
+  if(edit){
+   title.contentEditable=true;
+   title.onclick=()=>title.focus();
+   title.oninput=()=>{it.name=title.textContent;save();}
+  }
 
   const detail=document.createElement("div");
   detail.className="detail";
   detail.textContent=it.desc;
-  if(edit) detail.contentEditable=true;
-  detail.oninput=()=>{it.desc=detail.textContent;save();};
+  if(it.id==selected) detail.style.display="block";
 
-  if(it.id===selected) detail.style.display="block";
+  if(edit){
+   detail.contentEditable=true;
+   detail.onclick=()=>detail.focus();
+   detail.oninput=()=>{it.desc=detail.textContent;save();}
+  }
 
   li.onclick=()=>{selected=it.id;render();};
 
@@ -271,6 +280,9 @@ jsonFile.onchange=e=>{
  r.onload=()=>{
   tplData=JSON.parse(r.result);
   items=tplData;
+  mode="tpl";
+  document.getElementById("tabTpl").classList.add("active");
+  document.getElementById("tabMy").classList.remove("active");
   render();
  };
  r.readAsText(f);
