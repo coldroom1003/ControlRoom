@@ -12,17 +12,17 @@ body{
  display:flex;
  height:100vh;
  font-family:sans-serif;
- background:#fdfefe;
- touch-action:none;
+ background:#f6f1e7;
 }
 
+/* ===== 좌측 ===== */
 #left{flex:8;display:flex;flex-direction:column}
 
 .tabs{
  display:flex;
  height:36px;
- background:#eef5fb;
- border-bottom:1px solid #d6e2ee;
+ background:#e8dcc8;
+ border-bottom:1px solid #c9bda8;
 }
 .tab{
  flex:1;
@@ -32,15 +32,14 @@ body{
  cursor:pointer;
  font-size:14px;
 }
-.tab.active{background:white;font-weight:bold}
+.tab.active{background:#fffdf7;font-weight:bold}
 
 #imageArea{
  flex:1;
  position:relative;
- background:#f7fafc;
- overflow:hidden;
+ background:#e9e2d6;
+ touch-action:none;
 }
-
 #canvas{
  width:100%;height:100%;
  background-size:contain;
@@ -48,61 +47,74 @@ body{
  background-repeat:no-repeat;
 }
 
-#lines{
- position:absolute;
- inset:0;
- pointer-events:none;
-}
-
+/* ===== 항목 ===== */
 .hit{
  position:absolute;
  transform:translate(-50%,-50%);
- background:#fffef9;
- border:1px solid #c9d6e2;
+ background:#fffdf7;
+ border:1px solid #9c8f7a;
  padding:6px 10px;
  border-radius:12px;
  cursor:pointer;
 }
-.hit.active{
- background:#e8f4ff;
- box-shadow:0 0 0 2px #9ed0ff;
+
+/* 👉 말풍선 화살표 */
+.hit::after{
+ content:"";
+ position:absolute;
+ bottom:-6px;
+ left:14px;
+ width:10px;height:10px;
+ background:#fffdf7;
+ border-left:1px solid #9c8f7a;
+ border-bottom:1px solid #9c8f7a;
+ transform:rotate(45deg);
 }
 
+.hit.active{background:#ffe9a8}
+
+/* ===== 우측 ===== */
 #side{
  flex:2;
- border-left:1px solid #d6e2ee;
+ border-left:1px solid #c9bda8;
  display:flex;
  flex-direction:column;
+ background:#fffdf7;
 }
 
-#search{padding:8px;border:none;border-bottom:1px solid #ddd}
+#search{
+ padding:8px;
+ border:none;
+ border-bottom:1px solid #ddd;
+ background:#fffaf0;
+}
 
 ul{list-style:none;margin:0;padding:0;flex:1;overflow:auto}
 li{padding:8px;border-bottom:1px solid #eee;cursor:pointer}
-li.active{background:#eaf4ff}
+li.active{background:#f3e6c8}
 
 .detail{font-size:13px;display:none;margin-top:4px}
-.del{float:right;cursor:pointer}
+.del{float:right;color:#c97b7b;cursor:pointer}
 
+/* ===== 하단바 ===== */
 #bar{
  position:fixed;
  bottom:10px;
  left:10px;
- background:white;
+ background:#fffdf7;
  padding:8px;
  border-radius:12px;
- box-shadow:0 2px 6px rgba(0,0,0,.12);
+ box-shadow:0 2px 6px rgba(0,0,0,.15);
 }
-
 button{
  margin:2px;
- background:linear-gradient(145deg,#d7ecff,#b8dbff);
+ background:#f3d8e2;
  border:none;
- padding:6px 12px;
+ padding:6px 10px;
  border-radius:8px;
  cursor:pointer;
 }
-.edit-on{background:#7fc3ff}
+.edit-on{background:#a8d8c9}
 </style>
 </head>
 
@@ -116,7 +128,6 @@ button{
 
  <div id="imageArea">
   <div id="canvas"></div>
-  <svg id="lines"></svg>
   <div id="hits"></div>
  </div>
 </div>
@@ -128,8 +139,6 @@ button{
 
 <div id="bar">
  <button id="editBtn">편집</button>
- <button id="alignH">가로정렬</button>
- <button id="alignV">세로정렬</button>
  <button id="bgBtn">배경</button>
  <button id="pngBtn">PNG</button>
  <button id="jsonOut">JSON↓</button>
@@ -146,104 +155,108 @@ let items=myData;
 
 let edit=false;
 let selected=null;
-let multiSelect=[];
-let drag=null;
 let mode="my";
 let searchText="";
+let dragging=null;
 
+/* ===== 요소 ===== */
+const imageArea=document.getElementById("imageArea"); /* 🔥 복구 핵심 */
 const hits=document.getElementById("hits");
-const lines=document.getElementById("lines");
-const imageArea=document.getElementById("imageArea");
+const list=document.getElementById("list");
+const canvas=document.getElementById("canvas");
+const search=document.getElementById("search");
 
-function save(){localStorage.setItem("myData",JSON.stringify(myData));}
+const editBtn=document.getElementById("editBtn");
+const bgBtn=document.getElementById("bgBtn");
+const pngBtn=document.getElementById("pngBtn");
+const jsonOut=document.getElementById("jsonOut");
+const jsonIn=document.getElementById("jsonIn");
 
-/* ===== 드래그 (터치+펜슬 지원) ===== */
+const bgInput=document.getElementById("bgInput");
+const jsonFile=document.getElementById("jsonFile");
+
+/* ===== 드래그 (펜슬/터치 지원) ===== */
 function startDrag(e,it){
  if(!edit||mode!=="my")return;
- drag=it;
+ dragging=it;
 }
 function moveDrag(e){
- if(!drag)return;
+ if(!dragging)return;
  let t=e.touches?e.touches[0]:e;
  const r=imageArea.getBoundingClientRect();
- drag.x=(t.clientX-r.left)/r.width*100;
- drag.y=(t.clientY-r.top)/r.height*100;
+ dragging.x=(t.clientX-r.left)/r.width*100;
+ dragging.y=(t.clientY-r.top)/r.height*100;
  save();render();
 }
-function endDrag(){drag=null;}
+function endDrag(){dragging=null;}
 
-document.addEventListener("mousemove",moveDrag);
-document.addEventListener("mouseup",endDrag);
-document.addEventListener("touchmove",moveDrag,{passive:false});
-document.addEventListener("touchend",endDrag);
+document.addEventListener("pointermove",moveDrag);
+document.addEventListener("pointerup",endDrag);
 
-/* ===== 정렬 ===== */
-alignH.onclick=()=>{
- if(multiSelect.length<2)return;
- let avg=multiSelect.reduce((a,b)=>a+b.y,0)/multiSelect.length;
- multiSelect.forEach(it=>it.y=avg);
- save();render();
+/* ===== 편집 ===== */
+editBtn.onclick=()=>{
+ edit=!edit;
+ editBtn.classList.toggle("edit-on",edit);
 };
 
-alignV.onclick=()=>{
- if(multiSelect.length<2)return;
- let avg=multiSelect.reduce((a,b)=>a+b.x,0)/multiSelect.length;
- multiSelect.forEach(it=>it.x=avg);
- save();render();
+/* ===== 배경 ===== */
+bgBtn.onclick=()=>{ if(edit) bgInput.click(); };
+
+bgInput.onchange=e=>{
+ const f=e.target.files[0];
+ const r=new FileReader();
+ r.onload=()=>{
+  canvas.style.backgroundImage=`url(${r.result})`;
+  localStorage.setItem("bg",r.result);
+ };
+ r.readAsDataURL(f);
 };
+
+const bg=localStorage.getItem("bg");
+if(bg) canvas.style.backgroundImage=`url(${bg})`;
+
+/* ===== 추가 ===== */
+imageArea.ondblclick=e=>{
+ if(!edit||mode!=="my")return;
+ const r=imageArea.getBoundingClientRect();
+ myData.push({
+  id:Date.now(),
+  name:"항목",
+  desc:"설명",
+  x:(e.clientX-r.left)/r.width*100,
+  y:(e.clientY-r.top)/r.height*100
+ });
+ save(); render();
+};
+
+/* ===== 저장 ===== */
+function save(){
+ localStorage.setItem("myData",JSON.stringify(myData));
+}
 
 /* ===== 렌더 ===== */
 function render(){
  hits.innerHTML="";
- lines.innerHTML="";
+ list.innerHTML="";
 
  items.forEach(it=>{
-  const hx=it.lx??it.x;
-  const hy=it.ly??it.y;
-
-  if(it.lx!==null){
-   const path=document.createElementNS("http://www.w3.org/2000/svg","path");
-   const sx=it.x/100*imageArea.clientWidth;
-   const sy=it.y/100*imageArea.clientHeight;
-   const ex=it.lx/100*imageArea.clientWidth;
-   const ey=it.ly/100*imageArea.clientHeight;
-   const cx=(sx+ex)/2;
-   path.setAttribute("d",`M${sx},${sy} Q${cx},${sy} ${ex},${ey}`);
-   path.setAttribute("stroke","#444");
-   path.setAttribute("fill","none");
-   path.setAttribute("marker-end","url(#arrow)");
-   lines.appendChild(path);
-  }
-
   const d=document.createElement("div");
   d.className="hit"+(it.id===selected?" active":"");
-  d.style.left=hx+"%";
-  d.style.top=hy+"%";
+  d.style.left=it.x+"%";
+  d.style.top=it.y+"%";
   d.textContent=it.name;
 
   d.onpointerdown=e=>startDrag(e,it);
 
   d.onclick=e=>{
    e.stopPropagation();
-   if(edit){
-    if(!multiSelect.includes(it)) multiSelect.push(it);
-    else multiSelect=multiSelect.filter(x=>x!==it);
-   }else selected=it.id;
+   selected=it.id;
    render();
   };
 
   hits.appendChild(d);
  });
 }
-
-/* ===== SVG 화살촉 정의 ===== */
-lines.innerHTML=`
-<defs>
-<marker id="arrow" markerWidth="10" markerHeight="10" refX="6" refY="3" orient="auto">
-<path d="M0,0 L0,6 L6,3 z" fill="#444"/>
-</marker>
-</defs>
-`;
 
 render();
 </script>
