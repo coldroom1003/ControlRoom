@@ -39,8 +39,6 @@ body{
  position:relative;
  background:#f7fafc;
  overflow:hidden;
-
- /* 🔥 iPad 드래그 핵심 */
  touch-action:none;
 }
 
@@ -67,7 +65,21 @@ body{
  cursor:pointer;
  color:#3c4b5a;
 }
+.hit.transparent{
+ background:transparent;
+ border-style:dashed;
+}
 .hit.active{background:#e8f4ff}
+
+.handle{
+ position:absolute;
+ width:14px;height:14px;
+ border-radius:50%;
+ background:white;
+ border:2px solid #4a90e2;
+ transform:translate(-50%,-50%);
+ cursor:pointer;
+}
 
 #side{
  flex:2;
@@ -147,6 +159,7 @@ button{
  <button id="pngBtn">PNG</button>
  <button id="jsonOut">JSON↓</button>
  <button id="jsonIn">JSON↑</button>
+ <label><input type="checkbox" id="transChk">투명</label>
 
  <input type="file" id="bgInput" hidden accept="image/*">
  <input type="file" id="jsonFile" hidden accept=".json">
@@ -174,6 +187,7 @@ const bgBtn=document.getElementById("bgBtn");
 const pngBtn=document.getElementById("pngBtn");
 const jsonOut=document.getElementById("jsonOut");
 const jsonIn=document.getElementById("jsonIn");
+const transChk=document.getElementById("transChk");
 
 const bgInput=document.getElementById("bgInput");
 const jsonFile=document.getElementById("jsonFile");
@@ -202,49 +216,76 @@ bgInput.onchange=e=>{
 const bg=localStorage.getItem("bg");
 if(bg) canvas.style.backgroundImage=`url(${bg})`;
 
-/* ===== 추가 ===== */
-imageArea.ondblclick=e=>{
- if(!edit||mode!=="my")return;
- const r=imageArea.getBoundingClientRect();
- myData.push({
-  id:Date.now(),
-  name:"항목",
-  desc:"설명",
-  x:(e.clientX-r.left)/r.width*100,
-  y:(e.clientY-r.top)/r.height*100,
-  lx:null,ly:null
- });
- save();render();
-};
-
+/* ===== 저장 ===== */
 function save(){localStorage.setItem("myData",JSON.stringify(myData));}
 function remove(id){myData=myData.filter(x=>x.id!==id);items=myData;save();render();}
 
-/* ===== 🔥 드래그 (마우스+터치+펜슬) ===== */
-let drag=null;
+/* ===== 더블탭 추가 (모바일 대응) ===== */
+let lastTap=0;
+imageArea.onpointerdown=e=>{
+ if(!edit||mode!=="my")return;
+ if(e.target.classList.contains("hit")||e.target.classList.contains("handle"))return;
+
+ const now=Date.now();
+ if(now-lastTap<300){
+  const r=imageArea.getBoundingClientRect();
+  myData.push({
+   id:Date.now(),
+   name:"항목",
+   desc:"설명",
+   x:(e.clientX-r.left)/r.width*100,
+   y:(e.clientY-r.top)/r.height*100,
+   lx:null,ly:null,
+   transparent:false
+  });
+  save();render();
+ }
+ lastTap=now;
+};
+
+/* ===== 드래그 ===== */
+let dragItem=null;
+let dragType=null;
 
 document.addEventListener("pointermove",e=>{
- if(!drag)return;
-
+ if(!dragItem)return;
  const r=imageArea.getBoundingClientRect();
-
  const x=(e.clientX-r.left)/r.width*100;
  const y=(e.clientY-r.top)/r.height*100;
 
- /* 화살표 모드면 라벨 이동 */
- if(drag.lx!==null){
-  drag.lx=x;
-  drag.ly=y;
- }else{
-  drag.x=x;
-  drag.y=y;
+ if(dragType==="item"){
+  if(dragItem.lx!==null){
+   dragItem.lx=x;
+   dragItem.ly=y;
+  }else{
+   dragItem.x=x;
+   dragItem.y=y;
+  }
  }
 
- save();
- render();
+ if(dragType==="end"){
+  dragItem.lx=x;
+  dragItem.ly=y;
+ }
+
+ if(dragType==="start"){
+  dragItem.x=x;
+  dragItem.y=y;
+ }
+
+ save();render();
 });
 
-document.addEventListener("pointerup",()=>drag=null);
+document.addEventListener("pointerup",()=>dragItem=null);
+
+/* ===== 투명 체크 ===== */
+transChk.onchange=()=>{
+ if(!selected)return;
+ const it=myData.find(i=>i.id===selected);
+ if(!it)return;
+ it.transparent=transChk.checked;
+ save();render();
+};
 
 /* ===== 렌더 ===== */
 function render(){
@@ -263,7 +304,7 @@ function render(){
   const hx=it.lx??it.x;
   const hy=it.ly??it.y;
 
-  /* 라인 */
+  /* 선 */
   if(it.lx!==null){
    const line=document.createElementNS("http://www.w3.org/2000/svg","line");
    line.setAttribute("x1",it.x/100*imageArea.clientWidth);
@@ -273,23 +314,34 @@ function render(){
    line.setAttribute("stroke","#444");
    line.setAttribute("stroke-width","2");
    lines.appendChild(line);
+
+   /* 시작 핸들 */
+   const hs=document.createElement("div");
+   hs.className="handle";
+   hs.style.left=it.x+"%";
+   hs.style.top=it.y+"%";
+   hs.onpointerdown=e=>{dragItem=it;dragType="start";e.stopPropagation();}
+   hits.appendChild(hs);
+
+   /* 끝 핸들 */
+   const he=document.createElement("div");
+   he.className="handle";
+   he.style.left=it.lx+"%";
+   he.style.top=it.ly+"%";
+   he.onpointerdown=e=>{dragItem=it;dragType="end";e.stopPropagation();}
+   hits.appendChild(he);
   }
 
-  /* 히트박스 */
   const d=document.createElement("div");
-  d.className="hit"+(it.id===selected?" active":"");
+  d.className="hit"+(it.id===selected?" active":"")+(it.transparent?" transparent":"");
   d.style.left=hx+"%";
   d.style.top=hy+"%";
   d.textContent=it.name;
 
-  /* 드래그 시작 */
   d.onpointerdown=e=>{
-   if(edit&&mode==="my"){
-    drag=it;
-   }
+   if(edit&&mode==="my"){dragItem=it;dragType="item";}
   };
 
-  /* 화살표 토글 */
   d.ondblclick=e=>{
    if(edit&&mode==="my"){
     if(it.lx===null){
@@ -305,11 +357,9 @@ function render(){
 
   d.onclick=e=>{
    e.stopPropagation();
-   if(edit&&mode==="my"){
-    d.contentEditable=true;
-    d.focus();
-    d.onblur=()=>{d.contentEditable=false;it.name=d.textContent;save();}
-   }else{selected=it.id;render();}
+   selected=it.id;
+   transChk.checked=!!it.transparent;
+   render();
   };
 
   hits.appendChild(d);
@@ -330,16 +380,7 @@ function render(){
   det.textContent=it.desc;
   if(it.id===selected) det.style.display="block";
 
-  det.onclick=e=>{
-   e.stopPropagation();
-   if(edit&&mode==="my"){
-    det.contentEditable=true;
-    det.focus();
-    det.onblur=()=>{det.contentEditable=false;it.desc=det.textContent;save();}
-   }
-  };
-
-  li.onclick=()=>{selected=it.id;render();};
+  li.onclick=()=>{selected=it.id;transChk.checked=!!it.transparent;render();};
 
   li.appendChild(del);
   li.appendChild(t);
@@ -347,16 +388,6 @@ function render(){
   list.appendChild(li);
  });
 }
-
-/* 포커스아웃 */
-imageArea.onclick=e=>{
- if(!e.target.classList.contains("hit")){
-  selected=null;render();
- }
-};
-list.onclick=e=>{
- if(e.target===list){selected=null;render();}
-};
 
 /* PNG */
 pngBtn.onclick=()=>{
