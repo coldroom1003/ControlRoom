@@ -2,401 +2,291 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>공간 네이밍 맵</title>
+
 <link href="https://fonts.googleapis.com/css2?family=Nanum+Pen+Script&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 
 <style>
 *{box-sizing:border-box;font-family:'Nanum Pen Script',sans-serif;}
-body{margin:0;background:#faf7f2;}
+body{margin:0;background:#faf7f2;touch-action:manipulation;}
 
-/* 레이아웃 */
 .container{
-  display:grid;
-  grid-template-columns:8fr 2fr;
-  height:100vh;
-}
-
-.mode-badge{
-  position:fixed;top:10px;left:10px;
-  padding:6px 12px;
-  background:#ffe066;
-  border:2px solid #333;
-  display:none;z-index:999;
+ display:grid;
+ grid-template-columns:8fr 2fr;
+ height:100vh;
 }
 
 .image-area{
-  position:relative;
-  border:2px solid #444;
-  background:white;
-  overflow:hidden;
+ position:relative;
+ border:2px solid #444;
+ background:white;
+ overflow:hidden;
 }
 
 #canvas{
-  width:100%;
-  height:100%;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  background-position:center;
-  background-repeat:no-repeat;
-  background-size:contain;
-}
-
-.sketch-bg{
-  position:absolute;inset:0;
-  background:repeating-linear-gradient(
-    to bottom,
-    rgba(0,0,0,0.05) 1px,
-    transparent 2px,
-    transparent 6px
-  );
+ width:100%;
+ height:100%;
+ background:center/contain no-repeat;
 }
 
 .hit-area{
-  position:absolute;
-  transform:translate(-50%,-50%);
+ position:absolute;
+ transform:translate(-50%,-50%);
 }
 
 .hit-title{
-  background:#fffdf5;
-  border:1px solid #333;
-  padding:4px 8px;
-  cursor:pointer;
+ background:#fffdf5;
+ border:1px solid #333;
+ padding:4px 8px;
+ cursor:pointer;
 }
 
 .highlight{
-  position:absolute;
-  width:40px;height:26px;
-  background:rgba(255,235,59,0.7);
-  border-radius:50%;
-  transform:translate(-50%,-50%);
-  display:none;
-  pointer-events:none;
+ position:absolute;
+ width:40px;height:26px;
+ background:rgba(255,235,59,0.7);
+ border-radius:50%;
+ transform:translate(-50%,-50%);
+ display:none;
+ pointer-events:none;
 }
 
 .info-area{
-  border-left:2px dashed #aaa;
-  padding:10px;
-  overflow-y:auto;
+ border-left:2px dashed #aaa;
+ padding:10px;
+ overflow-y:auto;
 }
 
-.top-bar{display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap;}
-button{font-size:18px;cursor:pointer;}
-.edit-on{background:#ff7675;color:white;}
-.search{flex:1;padding:6px;}
+button{cursor:pointer;font-size:18px;}
+
 li{
-  background:#fffdf5;
-  margin-bottom:8px;
-  padding:8px;
-  border:1px solid #ccc;
-  cursor:pointer;
+ background:#fffdf5;
+ margin-bottom:8px;
+ padding:8px;
+ border:1px solid #ccc;
 }
-.detail{
-  display:none;
-  margin-top:6px;
-  border-left:4px solid #f4d03f;
-  padding-left:6px;
-}
-.del-btn{
-  float:right;
-  cursor:pointer;
-}
-@media(max-width:1024px){
-  .container{grid-template-columns:1fr;}
-  .info-area{position:fixed;bottom:0;left:0;right:0;height:200px;background:#fffdf5;overflow-y:auto;}
-  .top-bar{position:fixed;bottom:0;left:0;right:0;padding:6px;background:#fffdf5;z-index:999;}
-  #itemList{padding-bottom:50px;}
-}
+
+.detail{display:none;margin-top:6px;border-left:4px solid #f4d03f;padding-left:6px;}
+
+.edit-on{background:#ff7675;color:white;}
+
+.topbar{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px;}
+input[type="text"]{padding:6px;font-size:16px;}
+
 </style>
 </head>
 
 <body>
-<div id="modeBadge" class="mode-badge">✏️ 편집모드</div>
 
-<div class="container" id="captureRoot">
-  <div class="image-area" id="imageArea">
-    <div id="canvas">
-      <div class="sketch-bg"></div>
-      <div id="hitAreas"></div>
-      <div id="highlight" class="highlight"></div>
-    </div>
-  </div>
+<div class="container">
 
-  <div class="info-area" id="listPanel">
-    <div class="top-bar">
-      <button id="editBtn">✏️</button>
-      <button id="imgBtn">📷</button>
-      <button id="clearImgBtn">❌</button>
-      <button id="exportBtn">💾</button>
-      <label>
-        <input type="checkbox" id="includeList" checked> 리스트 포함
-      </label>
-      <input type="file" id="imgInput" accept="image/*" hidden>
-      <input id="searchBox" class="search" placeholder="검색">
-    </div>
-    <ul id="itemList"></ul>
-  </div>
+<div class="image-area" id="imageArea">
+<div id="canvas"></div>
+<div id="hitWrap"></div>
+<div id="highlight" class="highlight"></div>
 </div>
 
-<script type="module">
-import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm'
+<div class="info-area">
+<div class="topbar">
 
-// Supabase 설정
-const SUPABASE_URL = 'https://kpebsyuqtrvwbgbrvxoy.supabase.co'
-const SUPABASE_ANON_KEY = 'sb_publishable_aOx9dt3MyHESbd1T_CyQ3Q_ANSIepqb'
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+<button id="editBtn">편집</button>
+<button id="imgBtn">이미지</button>
 
-let items = []
-let editMode = false
+<button id="exportBtn">내보내기</button>
+<button id="importBtn">불러오기</button>
 
-// DOM 요소
-const canvas = document.getElementById("canvas")
-const imageArea = document.getElementById("imageArea")
-const hitWrap = document.getElementById("hitAreas")
-const listEl = document.getElementById("itemList")
-const highlight = document.getElementById("highlight")
-const badge = document.getElementById("modeBadge")
-const editBtn = document.getElementById("editBtn")
-const searchBox = document.getElementById("searchBox")
-const imgInput = document.getElementById("imgInput")
-const clearImgBtn = document.getElementById("clearImgBtn")
-const imgBtn = document.getElementById("imgBtn")
-const exportBtn = document.getElementById("exportBtn")
+<button id="saveSlotBtn">슬롯저장</button>
+<button id="loadSlotBtn">슬롯불러오기</button>
 
-/* 1. 편집모드 토글 */
-editBtn.onclick = () => {
-  editMode = !editMode
-  editBtn.classList.toggle("edit-on", editMode)
-  badge.style.display = editMode ? "block" : "none"
+<input id="searchBox" type="text" placeholder="검색">
+
+<input type="file" id="imgInput" hidden accept="image/*">
+<input type="file" id="jsonInput" hidden accept=".json">
+
+</div>
+
+<ul id="list"></ul>
+</div>
+
+</div>
+
+<script>
+let items=[];
+let editMode=false;
+
+const canvas=document.getElementById("canvas");
+const hitWrap=document.getElementById("hitWrap");
+const list=document.getElementById("list");
+const highlight=document.getElementById("highlight");
+
+function autoSave(){
+ localStorage.setItem("mapData",JSON.stringify(items));
 }
 
-/* 2. 이미지 업로드 (핵심 수정 부분) */
-imgBtn.onclick = () => { 
-  if (!editMode) return
-  imgInput.click() 
+function loadAuto(){
+ const d=localStorage.getItem("mapData");
+ if(d) items=JSON.parse(d);
+}
+loadAuto();
+
+document.getElementById("editBtn").onclick=()=>{
+ editMode=!editMode;
+ event.target.classList.toggle("edit-on",editMode);
+};
+
+document.getElementById("imgBtn").onclick=()=>{
+ if(!editMode)return;
+ imgInput.click();
+};
+
+imgInput.onchange=e=>{
+ const f=e.target.files[0];
+ const r=new FileReader();
+ r.onload=()=>{
+  canvas.style.backgroundImage=`url(${r.result})`;
+  localStorage.setItem("bgImg",r.result);
+ };
+ r.readAsDataURL(f);
+};
+
+const savedBg=localStorage.getItem("bgImg");
+if(savedBg) canvas.style.backgroundImage=`url(${savedBg})`;
+
+function render(){
+ hitWrap.innerHTML="";
+ list.innerHTML="";
+ const q=searchBox.value.toLowerCase();
+
+ items.filter(i=>
+  i.name.toLowerCase().includes(q) ||
+  i.desc.toLowerCase().includes(q)
+ ).forEach(it=>{
+  const d=document.createElement("div");
+  d.className="hit-area";
+  d.style.left=it.x+"%";
+  d.style.top=it.y+"%";
+
+  const t=document.createElement("div");
+  t.className="hit-title";
+  t.innerText=it.name;
+
+  t.ondblclick=()=>{
+   if(!editMode)return;
+   const v=prompt("이름",it.name);
+   if(v){it.name=v;autoSave();render();}
+  };
+
+  d.onclick=()=>select(it);
+  d.appendChild(t);
+  hitWrap.appendChild(d);
+
+  const li=document.createElement("li");
+  li.innerHTML="<b>"+it.name+"</b>";
+
+  const det=document.createElement("div");
+  det.className="detail";
+  det.innerText=it.desc;
+
+  det.ondblclick=()=>{
+   if(!editMode)return;
+   const v=prompt("설명",it.desc);
+   if(v){it.desc=v;autoSave();}
+  };
+
+  li.onclick=()=>{
+   document.querySelectorAll(".detail").forEach(x=>x.style.display="none");
+   det.style.display="block";
+   select(it);
+  };
+
+  li.appendChild(det);
+  list.appendChild(li);
+ });
 }
 
-imgInput.onchange = async (e) => {
-  if (!editMode) return
-  const file = e.target.files[0]
-  if (!file) return
+function select(it){
+ highlight.style.display="block";
+ highlight.style.left=it.x+"%";
+ highlight.style.top=it.y+"%";
+}
 
-  // 버튼 상태 변경 (로딩 표시)
-  const originalText = imgBtn.innerText
-  imgBtn.innerText = "⏳"
+imageArea.ondblclick=e=>{
+ if(!editMode)return;
+ const r=imageArea.getBoundingClientRect();
+ const it={
+  id:Date.now(),
+  name:"새항목",
+  desc:"설명",
+  x:(e.clientX-r.left)/r.width*100,
+  y:(e.clientY-r.top)/r.height*100
+ };
+ items.push(it);
+ autoSave();
+ render();
+};
 
-  try {
-    const fileName = `bg_${Date.now()}_${file.name}`
-    
-    // Supabase Storage 업로드
-    const { data, error } = await supabase.storage
-      .from('backgrounds')
-      .upload(fileName, file)
+searchBox.oninput=render;
 
-    if (error) throw error
+document.getElementById("exportBtn").onclick=()=>{
+ const data={
+  items,
+  bg:localStorage.getItem("bgImg")
+ };
+ const blob=new Blob([JSON.stringify(data)],{type:"application/json"});
+ const a=document.createElement("a");
+ a.href=URL.createObjectURL(blob);
+ a.download="map.json";
+ a.click();
+};
 
-    // 공용 URL 획득
-    const { data: urlData } = supabase.storage
-      .from('backgrounds')
-      .getPublicUrl(fileName)
+document.getElementById("importBtn").onclick=()=>jsonInput.click();
 
-    const publicUrl = urlData.publicUrl
-
-    // PC/모바일 호환성을 위해 backgroundImage 스타일을 명시적으로 지정
-    canvas.style.backgroundImage = `url('${publicUrl}')`
-    canvas.style.backgroundSize = "contain"
-    canvas.style.backgroundPosition = "center"
-    canvas.style.backgroundRepeat = "no-repeat"
-
-    alert("배경 이미지가 업데이트되었습니다.")
-  } catch (err) {
-    console.error("Upload failed:", err)
-    alert("업로드 실패: " + err.message)
-  } finally {
-    imgBtn.innerText = originalText
-    imgInput.value = "" // 파일 input 초기화 (같은 파일 재업로드 가능하게)
+jsonInput.onchange=e=>{
+ const f=e.target.files[0];
+ const r=new FileReader();
+ r.onload=()=>{
+  const d=JSON.parse(r.result);
+  items=d.items||[];
+  if(d.bg){
+   canvas.style.backgroundImage=`url(${d.bg})`;
+   localStorage.setItem("bgImg",d.bg);
   }
-}
+  autoSave();
+  render();
+ };
+ r.readAsText(f);
+};
 
-/* 3. 이미지 초기화 */
-clearImgBtn.onclick = () => { 
-  if (!editMode) return
-  if (confirm("배경 이미지를 삭제하시겠습니까?")) {
-    canvas.style.backgroundImage = "" 
-  }
-}
+/* 슬롯 시스템 */
+document.getElementById("saveSlotBtn").onclick=()=>{
+ const name=prompt("슬롯 이름");
+ if(!name)return;
+ localStorage.setItem("slot_"+name,JSON.stringify({
+  items,
+  bg:localStorage.getItem("bgImg")
+ }));
+ alert("슬롯 저장됨");
+};
 
-/* 4. 데이터 저장/삭제/로드 */
-const save = it => supabase.from('items').upsert(it)
+document.getElementById("loadSlotBtn").onclick=()=>{
+ const keys=Object.keys(localStorage).filter(k=>k.startsWith("slot_"));
+ const name=prompt("슬롯 이름\n"+keys.join("\n"));
+ if(!name)return;
+ const d=JSON.parse(localStorage.getItem(name));
+ if(!d)return;
 
-async function remove(id) {
-  if (!confirm("정말 삭제하시겠습니까?")) return
-  await supabase.from('items').delete().eq('id', id)
-  items = items.filter(i => i.id !== id)
-  render()
-}
+ items=d.items||[];
+ if(d.bg){
+  canvas.style.backgroundImage=`url(${d.bg})`;
+  localStorage.setItem("bgImg",d.bg);
+ }
+ autoSave();
+ render();
+};
 
-async function loadItems() {
-  const { data, error } = await supabase.from('items').select('*')
-  if (error) {
-    console.error("Load failed:", error)
-    return
-  }
-  items = data || []
-  render()
-}
-
-/* 5. 편집 UI 관련 함수 */
-function makeEditable(el, onSave) {
-  el.contentEditable = true
-  el.focus()
-  el.onblur = () => {
-    el.contentEditable = false
-    onSave(el.innerText)
-  }
-  // 엔터 키 입력 시 저장
-  el.onkeydown = (e) => { if(e.key === 'Enter') el.blur() }
-}
-
-/* 6. 렌더링 함수 */
-function render() {
-  renderHits()
-  renderList()
-}
-
-function renderHits() {
-  hitWrap.innerHTML = ""
-  items.forEach(it => {
-    const d = document.createElement("div")
-    d.className = "hit-area"
-    d.style.left = it.x + "%"
-    d.style.top = it.y + "%"
-
-    const t = document.createElement("div")
-    t.className = "hit-title"
-    t.innerText = it.name
-    
-    t.ondblclick = e => {
-      if (!editMode) return
-      e.stopPropagation()
-      makeEditable(t, v => { it.name = v; save(it); render() })
-    }
-    
-    d.onclick = e => {
-      e.stopPropagation()
-      select(it, true)
-    }
-    
-    d.appendChild(t)
-    hitWrap.appendChild(d)
-  })
-}
-
-function renderList() {
-  listEl.innerHTML = ""
-  const q = searchBox.value.toLowerCase()
-  const filtered = items.filter(i => 
-    (i.name || "").toLowerCase().includes(q) || 
-    (i.desc || "").toLowerCase().includes(q)
-  )
-
-  filtered.forEach(it => {
-    const li = document.createElement("li")
-    li.dataset.id = it.id // 식별용 ID 부여
-
-    const del = document.createElement("span")
-    del.innerText = "✖"
-    del.className = "del-btn"
-    del.onclick = e => { e.stopPropagation(); if (editMode) remove(it.id) }
-
-    const title = document.createElement("div")
-    title.innerText = it.name
-    title.ondblclick = e => { 
-      if (!editMode) return
-      makeEditable(title, v => { it.name = v; save(it); render() })
-    }
-
-    const detail = document.createElement("div")
-    detail.className = "detail"
-    detail.innerText = it.desc || "설명"
-    detail.ondblclick = e => { 
-      if (!editMode) return
-      makeEditable(detail, v => { it.desc = v; save(it) })
-    }
-
-    li.onclick = () => {
-      document.querySelectorAll(".detail").forEach(d => d.style.display = "none")
-      detail.style.display = "block"
-      select(it, false)
-    }
-
-    li.append(del, title, detail)
-    listEl.appendChild(li)
-  })
-}
-
-/* 7. 선택 및 하이라이트 */
-function select(it, openList) {
-  highlight.style.left = it.x + "%"
-  highlight.style.top = it.y + "%"
-  highlight.style.display = "block"
-
-  if (openList) {
-    // 리스트에서 해당 항목 찾아서 상세 펼치기
-    const listItems = listEl.querySelectorAll("li")
-    listItems.forEach(li => {
-      const d = li.querySelector(".detail")
-      if (li.innerText.includes(it.name)) { // 이름으로 매칭
-        d.style.display = "block"
-        li.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
-      } else {
-        d.style.display = "none"
-      }
-    })
-  }
-}
-
-/* 8. 기타 이벤트 */
-imageArea.onclick = e => {
-  if (editMode) return
-  if (!e.target.closest(".hit-area")) {
-    highlight.style.display = "none"
-    document.querySelectorAll(".detail").forEach(d => d.style.display = "none")
-  }
-}
-
-imageArea.ondblclick = e => {
-  if (!editMode) return
-  const r = imageArea.getBoundingClientRect()
-  const it = {
-    id: Date.now(),
-    name: "새 물건",
-    x: (e.clientX - r.left) / r.width * 100,
-    y: (e.clientY - r.top) / r.height * 100,
-    desc: "설명을 입력하세요"
-  }
-  items.push(it)
-  save(it)
-  render()
-}
-
-searchBox.oninput = renderList
-
-exportBtn.onclick = async () => {
-  if (editMode) { alert("뷰어모드에서만 내보내기 가능"); return }
-  const include = document.getElementById("includeList").checked
-  const target = include ? document.getElementById("captureRoot") : document.getElementById("imageArea")
-  
-  const canvasCap = await html2canvas(target, { useCORS: true }) // 외부 이미지 캡쳐를 위해 CORS 허용
-  const link = document.createElement("a")
-  link.download = `map_${Date.now()}.png`
-  link.href = canvasCap.toDataURL("image/png")
-  link.click()
-}
-
-// 초기 로드
-loadItems()
+render();
 </script>
+
 </body>
 </html>
