@@ -168,20 +168,15 @@ function render(){
 
   let pressTimer=null, tapCount=0;
   d.onpointerdown=e=>{
-   e.stopPropagation();
-   selected=it.id;
+   e.stopPropagation(); selected=it.id; render();
    if(edit && mode==="my"){dragItem=it; dragType="item";}
-   if(e.pointerType==="touch"){
-    tapCount++; clearTimeout(pressTimer);
-    pressTimer=setTimeout(()=>{
-     if(tapCount===2){ if(it.lx===null){it.lx=it.x+10; it.ly=it.y+10;} else{it.lx=null; it.ly=null;} save(); render(); }
-     tapCount=0;
-    }, 300);
+   if(edit && mode==="my" && e.detail===2){ // PC/모바일 더블클릭
+    if(it.lx===null){it.lx=it.x+10; it.ly=it.y+10;} else{it.lx=null; it.ly=null;}
+    save(); render();
    }
-   render();
   };
   d.onpointerup=()=>clearTimeout(pressTimer);
-  d.ondblclick=()=>{if(it.lx===null){it.lx=it.x+10; it.ly=it.y+10;} else{it.lx=null; it.ly=null;} save(); render();}
+
   hits.appendChild(d);
 
   /* 리스트 */
@@ -191,11 +186,11 @@ function render(){
   const del=document.createElement("span"); del.className="del"; del.textContent="✕"; del.onclick=e=>{e.stopPropagation(); if(edit && mode==="my") remove(it.id);};
 
   const title=document.createElement("div"); title.textContent=it.name;
-  if(edit) title.ondblclick=()=>{title.contentEditable=true; title.focus();}
+  if(edit) title.onclick=()=>{title.contentEditable=true; title.focus();}
   title.oninput=()=>{it.name=title.textContent; save();}
 
   const detail=document.createElement("div"); detail.className="detail"; detail.textContent=it.desc;
-  if(edit) detail.ondblclick=()=>{detail.contentEditable=true; detail.focus();}
+  if(edit) detail.onclick=()=>{detail.contentEditable=true; detail.focus();}
   detail.oninput=()=>{it.desc=detail.textContent; save();}
   if(it.id===selected) detail.style.display="block";
 
