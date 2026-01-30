@@ -12,17 +12,16 @@ body{
  display:flex;
  height:100vh;
  font-family:sans-serif;
- background:#f6f1e7;
+ background:#fdfefe;
 }
 
-/* ===== 좌측 ===== */
 #left{flex:8;display:flex;flex-direction:column}
 
 .tabs{
  display:flex;
  height:36px;
- background:#e8dcc8;
- border-bottom:1px solid #c9bda8;
+ background:#eef5fb;
+ border-bottom:1px solid #d6e2ee;
 }
 .tab{
  flex:1;
@@ -31,15 +30,20 @@ body{
  justify-content:center;
  cursor:pointer;
  font-size:14px;
+ color:#4a5a6a;
 }
-.tab.active{background:#fffdf7;font-weight:bold}
+.tab.active{background:white;font-weight:bold}
 
 #imageArea{
  flex:1;
  position:relative;
- background:#e9e2d6;
+ background:#f7fafc;
+ overflow:hidden;
+
+ /* 🔥 iPad 드래그 핵심 */
  touch-action:none;
 }
+
 #canvas{
  width:100%;height:100%;
  background-size:contain;
@@ -47,74 +51,73 @@ body{
  background-repeat:no-repeat;
 }
 
-/* ===== 항목 ===== */
+#lines{
+ position:absolute;
+ inset:0;
+ pointer-events:none;
+}
+
 .hit{
  position:absolute;
  transform:translate(-50%,-50%);
- background:#fffdf7;
- border:1px solid #9c8f7a;
- padding:6px 10px;
- border-radius:12px;
+ background:#fffef9;
+ border:1px solid #c9d6e2;
+ padding:5px 9px;
+ border-radius:10px;
  cursor:pointer;
+ color:#3c4b5a;
 }
+.hit.active{background:#e8f4ff}
 
-/* 👉 말풍선 화살표 */
-.hit::after{
- content:"";
- position:absolute;
- bottom:-6px;
- left:14px;
- width:10px;height:10px;
- background:#fffdf7;
- border-left:1px solid #9c8f7a;
- border-bottom:1px solid #9c8f7a;
- transform:rotate(45deg);
-}
-
-.hit.active{background:#ffe9a8}
-
-/* ===== 우측 ===== */
 #side{
  flex:2;
- border-left:1px solid #c9bda8;
+ border-left:1px solid #d6e2ee;
  display:flex;
  flex-direction:column;
- background:#fffdf7;
+ background:#f9fcff;
 }
 
 #search{
  padding:8px;
  border:none;
- border-bottom:1px solid #ddd;
- background:#fffaf0;
+ border-bottom:1px solid #dde7f0;
+ outline:none;
 }
 
 ul{list-style:none;margin:0;padding:0;flex:1;overflow:auto}
-li{padding:8px;border-bottom:1px solid #eee;cursor:pointer}
-li.active{background:#f3e6c8}
+li{padding:8px;border-bottom:1px solid #eef2f6;cursor:pointer}
+li.active{background:#eaf4ff}
 
-.detail{font-size:13px;display:none;margin-top:4px}
-.del{float:right;color:#c97b7b;cursor:pointer}
+.detail{
+ font-size:13px;
+ color:#6a7a8a;
+ display:none;
+ margin-top:4px;
+}
 
-/* ===== 하단바 ===== */
+.del{float:right;cursor:pointer}
+
 #bar{
  position:fixed;
  bottom:10px;
  left:10px;
- background:#fffdf7;
+ background:white;
  padding:8px;
  border-radius:12px;
- box-shadow:0 2px 6px rgba(0,0,0,.15);
+ box-shadow:0 2px 6px rgba(0,0,0,.12);
 }
+
 button{
  margin:2px;
- background:#f3d8e2;
+ background:linear-gradient(145deg,#d7ecff,#b8dbff);
  border:none;
- padding:6px 10px;
+ padding:6px 12px;
  border-radius:8px;
  cursor:pointer;
 }
-.edit-on{background:#a8d8c9}
+.edit-on{
+ background:linear-gradient(145deg,#a8d8ff,#7fc3ff);
+}
 </style>
 </head>
 
@@ -128,6 +131,7 @@ button{
 
  <div id="imageArea">
   <div id="canvas"></div>
+  <svg id="lines"></svg>
   <div id="hits"></div>
  </div>
 </div>
@@ -157,14 +161,13 @@ let edit=false;
 let selected=null;
 let mode="my";
 let searchText="";
-let dragging=null;
 
-/* ===== 요소 ===== */
-const imageArea=document.getElementById("imageArea"); /* 🔥 복구 핵심 */
 const hits=document.getElementById("hits");
 const list=document.getElementById("list");
 const canvas=document.getElementById("canvas");
 const search=document.getElementById("search");
+const imageArea=document.getElementById("imageArea");
+const lines=document.getElementById("lines");
 
 const editBtn=document.getElementById("editBtn");
 const bgBtn=document.getElementById("bgBtn");
@@ -175,33 +178,18 @@ const jsonIn=document.getElementById("jsonIn");
 const bgInput=document.getElementById("bgInput");
 const jsonFile=document.getElementById("jsonFile");
 
-/* ===== 드래그 (펜슬/터치 지원) ===== */
-function startDrag(e,it){
- if(!edit||mode!=="my")return;
- dragging=it;
-}
-function moveDrag(e){
- if(!dragging)return;
- let t=e.touches?e.touches[0]:e;
- const r=imageArea.getBoundingClientRect();
- dragging.x=(t.clientX-r.left)/r.width*100;
- dragging.y=(t.clientY-r.top)/r.height*100;
- save();render();
-}
-function endDrag(){dragging=null;}
-
-document.addEventListener("pointermove",moveDrag);
-document.addEventListener("pointerup",endDrag);
+/* ===== 탭 ===== */
+tabMy.onclick=()=>{mode="my";items=myData;tabMy.classList.add("active");tabTpl.classList.remove("active");render();}
+tabTpl.onclick=()=>{mode="tpl";items=tplData;tabTpl.classList.add("active");tabMy.classList.remove("active");render();}
 
 /* ===== 편집 ===== */
-editBtn.onclick=()=>{
- edit=!edit;
- editBtn.classList.toggle("edit-on",edit);
-};
+editBtn.onclick=()=>{edit=!edit;editBtn.classList.toggle("edit-on",edit);}
+
+/* ===== 검색 ===== */
+search.oninput=e=>{searchText=e.target.value.toLowerCase();render();}
 
 /* ===== 배경 ===== */
-bgBtn.onclick=()=>{ if(edit) bgInput.click(); };
-
+bgBtn.onclick=()=>{if(edit)bgInput.click();}
 bgInput.onchange=e=>{
  const f=e.target.files[0];
  const r=new FileReader();
@@ -211,7 +199,6 @@ bgInput.onchange=e=>{
  };
  r.readAsDataURL(f);
 };
-
 const bg=localStorage.getItem("bg");
 if(bg) canvas.style.backgroundImage=`url(${bg})`;
 
@@ -224,39 +211,186 @@ imageArea.ondblclick=e=>{
   name:"항목",
   desc:"설명",
   x:(e.clientX-r.left)/r.width*100,
-  y:(e.clientY-r.top)/r.height*100
+  y:(e.clientY-r.top)/r.height*100,
+  lx:null,ly:null
  });
- save(); render();
+ save();render();
 };
 
-/* ===== 저장 ===== */
-function save(){
- localStorage.setItem("myData",JSON.stringify(myData));
-}
+function save(){localStorage.setItem("myData",JSON.stringify(myData));}
+function remove(id){myData=myData.filter(x=>x.id!==id);items=myData;save();render();}
+
+/* ===== 🔥 드래그 (마우스+터치+펜슬) ===== */
+let drag=null;
+
+document.addEventListener("pointermove",e=>{
+ if(!drag)return;
+
+ const r=imageArea.getBoundingClientRect();
+
+ const x=(e.clientX-r.left)/r.width*100;
+ const y=(e.clientY-r.top)/r.height*100;
+
+ /* 화살표 모드면 라벨 이동 */
+ if(drag.lx!==null){
+  drag.lx=x;
+  drag.ly=y;
+ }else{
+  drag.x=x;
+  drag.y=y;
+ }
+
+ save();
+ render();
+});
+
+document.addEventListener("pointerup",()=>drag=null);
 
 /* ===== 렌더 ===== */
 function render(){
  hits.innerHTML="";
  list.innerHTML="";
+ lines.innerHTML="";
+ lines.setAttribute("width",imageArea.clientWidth);
+ lines.setAttribute("height",imageArea.clientHeight);
 
- items.forEach(it=>{
+ let filtered=items.filter(it=>
+  it.name.toLowerCase().includes(searchText)||
+  it.desc.toLowerCase().includes(searchText)
+ );
+
+ filtered.forEach(it=>{
+  const hx=it.lx??it.x;
+  const hy=it.ly??it.y;
+
+  /* 라인 */
+  if(it.lx!==null){
+   const line=document.createElementNS("http://www.w3.org/2000/svg","line");
+   line.setAttribute("x1",it.x/100*imageArea.clientWidth);
+   line.setAttribute("y1",it.y/100*imageArea.clientHeight);
+   line.setAttribute("x2",it.lx/100*imageArea.clientWidth);
+   line.setAttribute("y2",it.ly/100*imageArea.clientHeight);
+   line.setAttribute("stroke","#444");
+   line.setAttribute("stroke-width","2");
+   lines.appendChild(line);
+  }
+
+  /* 히트박스 */
   const d=document.createElement("div");
   d.className="hit"+(it.id===selected?" active":"");
-  d.style.left=it.x+"%";
-  d.style.top=it.y+"%";
+  d.style.left=hx+"%";
+  d.style.top=hy+"%";
   d.textContent=it.name;
 
-  d.onpointerdown=e=>startDrag(e,it);
+  /* 드래그 시작 */
+  d.onpointerdown=e=>{
+   if(edit&&mode==="my"){
+    drag=it;
+   }
+  };
+
+  /* 화살표 토글 */
+  d.ondblclick=e=>{
+   if(edit&&mode==="my"){
+    if(it.lx===null){
+     it.lx=it.x+10;
+     it.ly=it.y+10;
+    }else{
+     it.lx=null;it.ly=null;
+    }
+    save();render();
+   }
+   e.stopPropagation();
+  };
 
   d.onclick=e=>{
    e.stopPropagation();
-   selected=it.id;
-   render();
+   if(edit&&mode==="my"){
+    d.contentEditable=true;
+    d.focus();
+    d.onblur=()=>{d.contentEditable=false;it.name=d.textContent;save();}
+   }else{selected=it.id;render();}
   };
 
   hits.appendChild(d);
+
+  /* 리스트 */
+  const li=document.createElement("li");
+  if(it.id===selected) li.className="active";
+
+  const del=document.createElement("span");
+  del.className="del";
+  del.textContent="✕";
+  del.onclick=e=>{e.stopPropagation();if(edit&&mode==="my")remove(it.id);};
+
+  const t=document.createElement("div");t.textContent=it.name;
+
+  const det=document.createElement("div");
+  det.className="detail";
+  det.textContent=it.desc;
+  if(it.id===selected) det.style.display="block";
+
+  det.onclick=e=>{
+   e.stopPropagation();
+   if(edit&&mode==="my"){
+    det.contentEditable=true;
+    det.focus();
+    det.onblur=()=>{det.contentEditable=false;it.desc=det.textContent;save();}
+   }
+  };
+
+  li.onclick=()=>{selected=it.id;render();};
+
+  li.appendChild(del);
+  li.appendChild(t);
+  li.appendChild(det);
+  list.appendChild(li);
  });
 }
+
+/* 포커스아웃 */
+imageArea.onclick=e=>{
+ if(!e.target.classList.contains("hit")){
+  selected=null;render();
+ }
+};
+list.onclick=e=>{
+ if(e.target===list){selected=null;render();}
+};
+
+/* PNG */
+pngBtn.onclick=()=>{
+ html2canvas(imageArea).then(c=>{
+  const a=document.createElement("a");
+  a.href=c.toDataURL();
+  a.download="map.png";
+  a.click();
+ });
+};
+
+/* JSON */
+jsonOut.onclick=()=>{
+ const blob=new Blob([JSON.stringify(myData)],{type:"application/json"});
+ const a=document.createElement("a");
+ a.href=URL.createObjectURL(blob);
+ a.download="map.json";
+ a.click();
+};
+
+jsonIn.onclick=()=>jsonFile.click();
+jsonFile.onchange=e=>{
+ const f=e.target.files[0];
+ const r=new FileReader();
+ r.onload=()=>{
+  tplData=JSON.parse(r.result);
+  mode="tpl";
+  tabTpl.classList.add("active");
+  tabMy.classList.remove("active");
+  items=tplData;
+  render();
+ };
+ r.readAsText(f);
+};
 
 render();
 </script>
