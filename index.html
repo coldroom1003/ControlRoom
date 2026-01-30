@@ -12,7 +12,7 @@ body{
  display:flex;
  height:100vh;
  font-family:sans-serif;
- background:#f6f1e7; /* 종이 아이보리 */
+ background:#fdfefe; /* 눈편한 화이트 */
 }
 
 /* ===== 좌측 ===== */
@@ -21,8 +21,8 @@ body{
 .tabs{
  display:flex;
  height:36px;
- background:#e8dcc8;
- border-bottom:1px solid #c9bda8;
+ background:#eef5fb;
+ border-bottom:1px solid #d6e2ee;
 }
 .tab{
  flex:1;
@@ -31,17 +31,17 @@ body{
  justify-content:center;
  cursor:pointer;
  font-size:14px;
- color:#6b5e4a;
+ color:#4a5a6a;
 }
 .tab.active{
- background:#fffdf7;
+ background:white;
  font-weight:bold;
 }
 
 #imageArea{
  flex:1;
  position:relative;
- background:#e9e2d6;
+ background:#f7fafc;
 }
 #canvas{
  width:100%;height:100%;
@@ -53,53 +53,52 @@ body{
 .hit{
  position:absolute;
  transform:translate(-50%,-50%);
- background:#fffdf7;
- border:1px solid #9c8f7a;
+ background:#ffffff;
+ border:1px solid #c9d6e2;
  padding:5px 9px;
  border-radius:10px;
  cursor:pointer;
- color:#5c5141;
+ color:#3c4b5a;
 }
 .hit.active{
- background:#ffe9a8;
+ background:#e8f4ff;
 }
 
 /* ===== 우측 ===== */
 #side{
  flex:2;
- border-left:1px solid #c9bda8;
+ border-left:1px solid #d6e2ee;
  display:flex;
  flex-direction:column;
- background:#fffdf7;
+ background:#f9fcff;
 }
 
 #search{
  padding:8px;
  border:none;
- border-bottom:1px solid #ddd;
+ border-bottom:1px solid #dde7f0;
  outline:none;
- background:#fffaf0;
+ background:white;
 }
 
 ul{list-style:none;margin:0;padding:0;flex:1;overflow:auto}
 li{
  padding:8px;
- border-bottom:1px solid #eee;
+ border-bottom:1px solid #eef2f6;
  cursor:pointer;
- color:#5c5141;
 }
-li.active{background:#f3e6c8}
+li.active{background:#eaf4ff}
 
 .detail{
  font-size:13px;
- color:#7a6f5c;
+ color:#6a7a8a;
  display:none;
  margin-top:4px;
 }
 
 .del{
  float:right;
- color:#c97b7b;
+ color:#7f8fa6;
  cursor:pointer;
 }
 
@@ -108,22 +107,30 @@ li.active{background:#f3e6c8}
  position:fixed;
  bottom:10px;
  left:10px;
- background:#fffdf7;
+ background:white;
  padding:8px;
  border-radius:12px;
- box-shadow:0 2px 6px rgba(0,0,0,.15);
+ box-shadow:0 2px 6px rgba(0,0,0,.12);
 }
+
 button{
  margin:2px;
- background:#f3d8e2;
+ background:linear-gradient(145deg,#d7ecff,#b8dbff);
  border:none;
- padding:6px 10px;
+ padding:6px 12px;
  border-radius:8px;
  cursor:pointer;
- color:#5c5141;
+ color:#2f4f6f;
+ transition:.15s;
+}
+button:hover{
+ background:linear-gradient(145deg,#c3e2ff,#9fcbff);
+}
+button:active{
+ background:linear-gradient(145deg,#9fcbff,#7fb7f5);
 }
 .edit-on{
- background:#a8d8c9;
+ background:linear-gradient(145deg,#a8d8ff,#7fc3ff);
 }
 </style>
 </head>
@@ -173,6 +180,7 @@ const hits=document.getElementById("hits");
 const list=document.getElementById("list");
 const canvas=document.getElementById("canvas");
 const search=document.getElementById("search");
+const imageArea=document.getElementById("imageArea");
 
 const editBtn=document.getElementById("editBtn");
 const bgBtn=document.getElementById("bgBtn");
@@ -262,7 +270,6 @@ function render(){
  );
 
  filtered.forEach(it=>{
-  /* 그림 */
   const d=document.createElement("div");
   d.className="hit"+(it.id===selected?" active":"");
   d.style.left=it.x+"%";
@@ -285,7 +292,6 @@ function render(){
   };
   hits.appendChild(d);
 
-  /* 리스트 */
   const li=document.createElement("li");
   if(it.id===selected) li.className="active";
 
@@ -327,13 +333,20 @@ function render(){
  });
 }
 
-/* ===== 포커스 해제 ===== */
-imageArea.onclick=e=>{
- if(e.target===imageArea){
+/* ===== 포커스 아웃 (복구) ===== */
+imageArea.addEventListener("click",e=>{
+ if(!e.target.classList.contains("hit")){
   selected=null;
   render();
  }
-};
+});
+
+list.addEventListener("click",e=>{
+ if(e.target===list){
+  selected=null;
+  render();
+ }
+});
 
 /* ===== PNG ===== */
 pngBtn.onclick=()=>{
