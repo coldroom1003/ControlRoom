@@ -421,19 +421,17 @@ pngBtn.onclick = () => {
   });
 };
 
-
 /* JSON */
 jsonOut.onclick = () => {
   const name = prompt("파일 이름을 입력하세요", "map");
   if (!name) return;
 
-  /* 1️⃣ JSON 저장 */
   const jsonBlob = new Blob(
     [JSON.stringify(myData, null, 2)],
     { type: "application/json" }
   );
-  const jsonUrl = URL.createObjectURL(jsonBlob);
 
+  const jsonUrl = URL.createObjectURL(jsonBlob);
   const jsonA = document.createElement("a");
   jsonA.href = jsonUrl;
   jsonA.download = name + ".json";
@@ -441,20 +439,8 @@ jsonOut.onclick = () => {
   jsonA.click();
   document.body.removeChild(jsonA);
   URL.revokeObjectURL(jsonUrl);
-
-  /* 2️⃣ 배경 이미지 저장 (조금 뒤에 실행) */
-  const bg = localStorage.getItem("bg");
-  if (bg) {
-    setTimeout(() => {
-      const imgA = document.createElement("a");
-      imgA.href = bg;
-      imgA.download = name + ".png";
-      document.body.appendChild(imgA);
-      imgA.click();
-      document.body.removeChild(imgA);
-    }, 300);
-  }
 };
+
 
 jsonIn.onclick=()=>jsonFile.click();
 jsonFile.onchange=e=>{
