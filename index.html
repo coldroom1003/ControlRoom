@@ -162,22 +162,60 @@ function render(){
   }
 
   /* 항목 */
-  const d=document.createElement("div");
-  d.className="hit"+(it.id===selected?" active":"");
-  d.style.left=hx+"%"; d.style.top=hy+"%"; d.textContent=it.name;
+  /* 항목 */
+const d = document.createElement("div");
+d.className = "hit" + (it.id === selected ? " active" : "");
+d.style.left = hx + "%";
+d.style.top = hy + "%";
+d.textContent = it.name;
 
-  let pressTimer=null, tapCount=0;
-  d.onpointerdown=e=>{
-   e.stopPropagation(); selected=it.id; render();
-   if(edit && mode==="my"){dragItem=it; dragType="item";}
-   if(edit && mode==="my" && e.detail===2){ // PC/모바일 더블클릭
-    if(it.lx===null){it.lx=it.x+10; it.ly=it.y+10;} else{it.lx=null; it.ly=null;}
-    save(); render();
-   }
-  };
-  d.onpointerup=()=>clearTimeout(pressTimer);
+let lastTap = 0;
 
-  hits.appendChild(d);
+d.onpointerdown = e => {
+  e.stopPropagation();
+  const now = Date.now();
+  selected = it.id;
+
+  // 🔥 더블탭 / 더블클릭 판정
+  if (edit && mode === "my" && now - lastTap < 300) {
+    // 1️⃣ 화살표 토글
+    if (it.lx === null) {
+      it.lx = it.x + 10;
+      it.ly = it.y + 10;
+    } else {
+      it.lx = null;
+      it.ly = null;
+    }
+    save();
+    render();
+    return;
+  }
+
+  lastTap = now;
+
+  // 드래그
+  if (edit && mode === "my") {
+    dragItem = it;
+    dragType = "item";
+  }
+
+  render();
+};
+
+// ✏️ 이름 수정 (우클릭 or long-press 대용)
+d.oncontextmenu = e => {
+  e.preventDefault();
+  if (!edit || mode !== "my") return;
+  const v = prompt("이름 수정", it.name);
+  if (v !== null) {
+    it.name = v;
+    save();
+    render();
+  }
+};
+
+hits.appendChild(d);
+
 
   /* 리스트 */
   const li=document.createElement("li");
