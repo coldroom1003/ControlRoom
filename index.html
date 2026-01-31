@@ -19,27 +19,24 @@ body{margin:0;display:flex;height:100vh;font-family:sans-serif;background:#fdfef
 #side{flex:2;border-left:1px solid #d6e2ee;display:flex;flex-direction:column;}
 #search{padding:8px;border:none;border-bottom:1px solid #dde7f0;}
 ul{list-style:none;margin:0;padding:0;flex:1;overflow:auto}
-li{padding:8px;border-bottom:1px solid #eef2f6;cursor:pointer;position:relative;}
+li{padding:12px 8px;border-bottom:1px solid #eef2f6;cursor:pointer;position:relative;}
 li.active{background:#eaf4ff}
 .detail{display:none;font-size:13px;color:#666;margin-top:4px}
 .del{
-  position:absolute;
-  right:8px;
-  top:50%;
-  transform:translateY(-50%);
-  color:#c33;
-  cursor:pointer;
-  font-weight:bold;
-  z-index:3;
-  padding:4px;
-  line-height:1;
+ position:absolute;
+ right:8px;
+ top:10px;
+ color:#c33;
+ cursor:pointer;
+ font-weight:bold;
+ z-index:2;
+ padding:4px;
+ line-height:1;
 }
 li > div:first-child {
-  display:inline-block;
-  max-width: calc(100% - 48px); /* ← del 클릭 영역 확보 */
-  vertical-align:middle;
+  display: inline-block;
+  max-width: calc(100% - 40px); /* 삭제 버튼 영역 제외 */
 }
-
 
 #bar{position:fixed;bottom:10px;left:10px;background:white;padding:8px;border-radius:12px;box-shadow:0 2px 6px rgba(0,0,0,.12);}
 button{margin:2px;padding:6px 12px;border-radius:8px;border:none;cursor:pointer;}
@@ -318,17 +315,11 @@ if (showLinks && it.lx !== null) {
   const title=document.createElement("div");
   title.textContent=it.name;
   if(edit){
-   let titleTap = 0;
-title.onclick = e => {
-  e.stopPropagation();
-  const now = Date.now();
-  if (now - titleTap < 300 && edit) {
-    title.contentEditable = true;
+   title.onclick=e=>{
+    e.stopPropagation();
+    title.contentEditable=true;
     title.focus();
-  }
-  titleTap = now;
-};
-
+   };
   }
   title.oninput=()=>{it.name=title.textContent; save();};
   title.onblur=()=>title.contentEditable=false;
@@ -336,43 +327,25 @@ title.onclick = e => {
   const detail=document.createElement("div");
   detail.className="detail";
   detail.textContent=it.desc;
-  let detailTap = 0;
-detail.onclick = e => {
-  e.stopPropagation();
-  const now = Date.now();
-  if (now - detailTap < 300 && edit) {
-    detail.contentEditable = true;
+  if(edit){
+   detail.onclick=e=>{
+    e.stopPropagation();
+    detail.contentEditable=true;
     detail.focus();
+   };
   }
-  detailTap = now;
-};
-
   detail.oninput=()=>{it.desc=detail.textContent; save();};
   detail.onblur=()=>detail.contentEditable=false;
 
   if(it.id===selected || searchText){
     detail.style.display="block";
   }
-li.onclick = (e) => {
-  if (!edit) {
-    selected = it.id;
-    render();
-    return;
-  }
 
-  // 편집모드: 진짜 li 빈 공간만 허용
-  if (
-    e.target.closest(".del") ||
-    e.target === title ||
-    e.target === detail
-  ) {
-    return;
-  }
-
+  li.onclick = (e) => {
+  if (edit && e.target !== li) return; // 타이틀/디테일 클릭은 무시
   selected = it.id;
   render();
 };
-
 
   li.appendChild(del);
   li.appendChild(title);
