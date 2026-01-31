@@ -22,7 +22,25 @@ ul{list-style:none;margin:0;padding:0;flex:1;overflow:auto}
 li{padding:8px;border-bottom:1px solid #eef2f6;cursor:pointer;position:relative;}
 li.active{background:#eaf4ff}
 .detail{display:none;font-size:13px;color:#666;margin-top:4px}
-.del{position:absolute;right:5px;top:8px;color:#c33;cursor:pointer;font-weight:bold;}
+.del{
+  position:absolute;
+  right:8px;
+  top:50%;
+  transform:translateY(-50%);
+  color:#c33;
+  cursor:pointer;
+  font-weight:bold;
+  z-index:3;
+  padding:4px;
+  line-height:1;
+}
+li > div:first-child {
+  display:inline-block;
+  max-width: calc(100% - 48px); /* ← del 클릭 영역 확보 */
+  vertical-align:middle;
+}
+
+
 #bar{position:fixed;bottom:10px;left:10px;background:white;padding:8px;border-radius:12px;box-shadow:0 2px 6px rgba(0,0,0,.12);}
 button{margin:2px;padding:6px 12px;border-radius:8px;border:none;cursor:pointer;}
 .edit-on{background:#a8d8ff;}
@@ -51,6 +69,7 @@ button{margin:2px;padding:6px 12px;border-radius:8px;border:none;cursor:pointer;
 <div id="bar">
 <button id="editBtn">편집</button>
 <button id="bgBtn">배경</button>
+<button id="linkBtn">핸들</button>
 <button id="pngBtn">PNG</button>
 <button id="jsonOut">JSON↓</button>
 <button id="jsonIn">JSON↑</button>
@@ -64,12 +83,14 @@ let tplData=[];
 let items=myData;
 
 let edit=false, selected=null, mode="my", searchText="";
+let showLinks = true; // ← 선 + 포인트핸들 표시 여부
 const hits=document.getElementById("hits");
 const list=document.getElementById("list");
 const canvas=document.getElementById("canvas");
 const lines=document.getElementById("lines");
 const imageArea=document.getElementById("imageArea");
 const editBtn=document.getElementById("editBtn");
+const linkBtn = document.getElementById("linkBtn");
 const bgBtn=document.getElementById("bgBtn");
 const pngBtn=document.getElementById("pngBtn");
 const jsonOut=document.getElementById("jsonOut");
@@ -77,6 +98,14 @@ const jsonIn=document.getElementById("jsonIn");
 const bgInput=document.getElementById("bgInput");
 const jsonFile=document.getElementById("jsonFile");
 const search=document.getElementById("search");
+
+/* 포인트라인생성 */ 
+
+linkBtn.onclick = () => {
+  showLinks = !showLinks;
+  linkBtn.textContent = showLinks ? "라인 숨김" : "라인 표시";
+  render();
+};
 
 /* 탭 */
 tabMy.onclick=()=>{mode="my";items=myData;tabMy.classList.add("active"); tabTpl.classList.remove("active"); render();}
@@ -111,14 +140,17 @@ imageArea.addEventListener("pointerdown", e=>{
   clearFocus();
   if(edit && mode==="my"){
    const r=imageArea.getBoundingClientRect();
-   myData.push({
+   const px = (e.clientX - r.left) / r.width * 100;
+const py = (e.clientY - r.top) / r.height * 100;
+
+myData.push({
   id: Date.now(),
   name: "항목",
   desc: "설명",
-  x: (e.clientX - r.left) / r.width * 100,
-  y: (e.clientY - r.top) / r.height * 100,
-  lx: (e.clientX - r.left) / r.width * 100 + 8,
-  ly: (e.clientY - r.top) / r.height * 100 + 8
+  x: px,
+  y: py,
+  lx: showLinks ? px + 8 : null,
+  ly: showLinks ? py + 8 : null
 });
 
    save(); render();
@@ -141,168 +173,235 @@ document.addEventListener("pointermove", e=>{
 });
 document.addEventListener("pointerup",()=>dragItem=null);
 
-/* 렌더 */
+/* =======================
+   렌더 (여기만 수정됨)
+   ======================= */
 function render(){
- hits.innerHTML=""; list.innerHTML=""; lines.innerHTML="";
- lines.setAttribute("width",imageArea.clientWidth); lines.setAttribute("height",imageArea.clientHeight);
+ hits.innerHTML="";
+ list.innerHTML="";
+ lines.innerHTML="";
+ lines.setAttribute("width",imageArea.clientWidth);
+ lines.setAttribute("height",imageArea.clientHeight);
 
- let filtered=items.filter(it=> it.name.toLowerCase().includes(searchText) || it.desc.toLowerCase().includes(searchText));
+ /* 🔍 [추가] 검색 매칭 ID */
+ const matchedIds = new Set(
+   items
+     .filter(it =>
+       it.name.toLowerCase().includes(searchText) ||
+       it.desc.toLowerCase().includes(searchText)
+     )
+     .map(it => it.id)
+ );
 
- filtered.forEach(it=>{
-  const hx=it.lx??it.x; const hy=it.ly??it.y;
+ /* 📋 리스트용 필터 */
+ const filtered = searchText
+   ? items.filter(it => matchedIds.has(it.id))
+   : items;
+
+ /* ===== 그림은 전체 items 기준 ===== */
+ items.forEach(it=>{
+  const hx=it.lx??it.x;
+  const hy=it.ly??it.y;
+  const isMatch = matchedIds.has(it.id);
 
   /* 선 */
-  if(it.lx!==null){
-   const line=document.createElementNS("http://www.w3.org/2000/svg","line");
-   line.setAttribute("x1",it.x/100*imageArea.clientWidth);
-   line.setAttribute("y1",it.y/100*imageArea.clientHeight);
-   line.setAttribute("x2",it.lx/100*imageArea.clientWidth);
-   line.setAttribute("y2",it.ly/100*imageArea.clientHeight);
-   line.setAttribute("stroke","#444"); line.setAttribute("stroke-width","2");
-   lines.appendChild(line);
+  /* 선 */
+if (showLinks && it.lx !== null) {
 
-   ["start","end"].forEach(type=>{
-    const h=document.createElement("div"); h.className="handle";
+
+  const sx = it.x / 100 * imageArea.clientWidth;
+  const sy = it.y / 100 * imageArea.clientHeight;
+  const ex = it.lx / 100 * imageArea.clientWidth;
+  const ey = it.ly / 100 * imageArea.clientHeight;
+
+  const dx = ex - sx;
+  const dy = ey - sy;
+  const len = Math.hypot(dx, dy) || 1;
+
+  // ⬇️ 겹침 방지 거리
+  const labelOffset = 15;   // 항목 라벨 바깥
+  const handleOffset = 30;  // 핸들 원 바깥
+
+  const x1 = sx + (dx / len) * labelOffset;
+  const y1 = sy + (dy / len) * labelOffset;
+
+  const x2 = ex - (dx / len) * handleOffset;
+  const y2 = ey - (dy / len) * handleOffset;
+
+  const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+  line.setAttribute("x1", x1);
+  line.setAttribute("y1", y1);
+  line.setAttribute("x2", x2);
+  line.setAttribute("y2", y2);
+  line.setAttribute("stroke", "#444");
+  line.setAttribute("stroke-width", "2");
+
+  lines.appendChild(line);
+
+   ["start"].forEach(type=>{
+    const h=document.createElement("div");
+    h.className="handle";
     h.style.left=(type==="start"?it.x:it.lx)+"%";
     h.style.top=(type==="start"?it.y:it.ly)+"%";
-    h.onpointerdown=e=>{if(edit && mode==="my"){dragItem=it; dragType=type; e.stopPropagation();}}
+    h.onpointerdown=e=>{
+      if(edit && mode==="my"){
+        dragItem=it;
+        dragType=type;
+        e.stopPropagation();
+      }
+    };
     hits.appendChild(h);
    });
   }
 
   /* 항목 */
-  /* 항목 */
-const d = document.createElement("div");
-d.className = "hit" + (it.id === selected ? " active" : "");
-d.style.left = hx + "%";
-d.style.top = hy + "%";
-d.textContent = it.name;
+  const d=document.createElement("div");
+  d.className=
+    "hit"+
+    (it.id===selected?" active":"")+
+    (searchText && isMatch?" search-hit":"");
 
-let lastTap = 0;
+  if (searchText && !isMatch) {
+    d.style.opacity="0.25";
+  }
 
-d.onpointerdown = e => {
+  d.style.left=hx+"%";
+  d.style.top=hy+"%";
+  d.textContent=it.name;
+
+  let lastTap=0;
+  d.onpointerdown=e=>{
+   e.stopPropagation();
+   const now=Date.now();
+   selected=it.id;
+
+   if(edit && mode==="my" && now-lastTap<300){
+    if(it.lx===null){
+     it.lx=it.x+10; it.ly=it.y+10;
+    }else{
+     it.lx=null; it.ly=null;
+    }
+    save(); render(); return;
+   }
+   lastTap=now;
+
+   if(edit && mode==="my"){
+    dragItem=it; dragType="item";
+   }
+   render();
+  };
+
+  d.oncontextmenu=e=>{
+   e.preventDefault();
+   if(!edit||mode!=="my")return;
+   const v=prompt("이름 수정",it.name);
+   if(v!==null){it.name=v; save(); render();}
+  };
+
+  hits.appendChild(d);
+ });
+
+ /* ===== 리스트는 filtered 기준 ===== */
+ filtered.forEach(it=>{
+  const li=document.createElement("li");
+  li.style.paddingRight = "32px";
+  if(it.id===selected) li.className="active";
+
+  const del=document.createElement("span");
+  del.className="del";
+  del.textContent="✕";
+  del.onclick=e=>{
+    e.stopPropagation();
+    if(edit && mode==="my") remove(it.id);
+  };
+
+  const title=document.createElement("div");
+  title.textContent=it.name;
+  if(edit){
+   let titleTap = 0;
+title.onclick = e => {
   e.stopPropagation();
   const now = Date.now();
-  selected = it.id;
+  if (now - titleTap < 300 && edit) {
+    title.contentEditable = true;
+    title.focus();
+  }
+  titleTap = now;
+};
 
-  // 🔥 더블탭 / 더블클릭 판정
-  if (edit && mode === "my" && now - lastTap < 300) {
-    // 1️⃣ 화살표 토글
-    if (it.lx === null) {
-      it.lx = it.x + 10;
-      it.ly = it.y + 10;
-    } else {
-      it.lx = null;
-      it.ly = null;
-    }
-    save();
+  }
+  title.oninput=()=>{it.name=title.textContent; save();};
+  title.onblur=()=>title.contentEditable=false;
+
+  const detail=document.createElement("div");
+  detail.className="detail";
+  detail.textContent=it.desc;
+  let detailTap = 0;
+detail.onclick = e => {
+  e.stopPropagation();
+  const now = Date.now();
+  if (now - detailTap < 300 && edit) {
+    detail.contentEditable = true;
+    detail.focus();
+  }
+  detailTap = now;
+};
+
+  detail.oninput=()=>{it.desc=detail.textContent; save();};
+  detail.onblur=()=>detail.contentEditable=false;
+
+  if(it.id===selected || searchText){
+    detail.style.display="block";
+  }
+li.onclick = (e) => {
+  if (!edit) {
+    selected = it.id;
     render();
     return;
   }
 
-  lastTap = now;
-
-  // 드래그
-  if (edit && mode === "my") {
-    dragItem = it;
-    dragType = "item";
+  // 편집모드: 진짜 li 빈 공간만 허용
+  if (
+    e.target.closest(".del") ||
+    e.target === title ||
+    e.target === detail
+  ) {
+    return;
   }
 
+  selected = it.id;
   render();
 };
 
-// ✏️ 이름 수정 (우클릭 or long-press 대용)
-d.oncontextmenu = e => {
-  e.preventDefault();
-  if (!edit || mode !== "my") return;
-  const v = prompt("이름 수정", it.name);
-  if (v !== null) {
-    it.name = v;
-    save();
-    render();
-  }
-};
 
-hits.appendChild(d);
-
-
-  /* 리스트 */
-  const li=document.createElement("li");
-  if(it.id===selected) li.className="active";
-
-  const del=document.createElement("span"); del.className="del"; del.textContent="✕"; del.onclick=e=>{e.stopPropagation(); if(edit && mode==="my") remove(it.id);};
-
-  const title=document.createElement("div"); title.textContent=it.name;
-  if (edit) {
-  title.onclick = (e) => {
-    e.stopPropagation();              // 🔥 중요
-    title.contentEditable = true;
-    title.focus();
-  };
-}
-
-title.oninput = () => {
-  it.name = title.textContent;
-  save();
-};
-
-title.onblur = () => {
-  title.contentEditable = false;
-};
-
-title.onkeydown = e => {
-  if (e.key === "Enter") {
-    e.preventDefault();
-    title.blur();
-  }
-};
-
-
-  const detail = document.createElement("div");
-detail.className = "detail";
-detail.textContent = it.desc;
-
-if (edit) {
-  detail.onclick = (e) => {
-    e.stopPropagation();              // 🔥 중요
-    detail.contentEditable = true;
-    detail.focus();
-  };
-}
-
-detail.oninput = () => {
-  it.desc = detail.textContent;
-  save();
-};
-
-detail.onblur = () => {
-  detail.contentEditable = false;
-};
-
-  if(it.id===selected) detail.style.display="block";
-
-  li.onclick=()=>{selected=it.id; render();};
-  li.appendChild(del); li.appendChild(title); li.appendChild(detail);
+  li.appendChild(del);
+  li.appendChild(title);
+  li.appendChild(detail);
   list.appendChild(li);
  });
 }
 
 /* PNG */
-pngBtn.onclick=()=>{ html2canvas(imageArea).then(c=>{ const a=document.createElement("a"); a.href=c.toDataURL(); a.download="map.png"; a.click(); }); }
+pngBtn.onclick=()=>{html2canvas(imageArea).then(c=>{const a=document.createElement("a");a.href=c.toDataURL();a.download="map.png";a.click();});}
 
 /* JSON */
-jsonOut.onclick=()=>{ const blob=new Blob([JSON.stringify(myData)],{type:"application/json"}); const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="map.json"; a.click(); }
+jsonOut.onclick=()=>{const blob=new Blob([JSON.stringify(myData)],{type:"application/json"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="map.json";a.click();}
 jsonIn.onclick=()=>jsonFile.click();
 jsonFile.onchange=e=>{
- const f=e.target.files[0]; if(!f) return;
+ const f=e.target.files[0]; if(!f)return;
  const r=new FileReader();
  r.onload=()=>{
-  tplData=JSON.parse(r.result); mode="tpl"; items=tplData; tabTpl.classList.add("active"); tabMy.classList.remove("active"); render();
+  tplData=JSON.parse(r.result);
+  mode="tpl"; items=tplData;
+  tabTpl.classList.add("active");
+  tabMy.classList.remove("active");
+  render();
  };
  r.readAsText(f);
 };
 
 render();
 </script>
+
 </body>
 </html>
