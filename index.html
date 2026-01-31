@@ -11,9 +11,10 @@
 }
 body{margin:0;display:flex;height:100vh;font-family:"MyFont",sans-serif;background:#fdfefe;}
 #left{flex:8;display:flex;flex-direction:column}
-.tabs{display:flex;height:36px;background:#eef5fb;border-bottom:1px solid #d6e2ee;}
-.tab{flex:1;display:flex;align-items:center;justify-content:center;cursor:pointer;}
-.tab.active{background:white;font-weight:bold}
+.tabs{display:flex;height:36px;background:white;border-bottom:1px solid #d6e2ee;gap: 1px;}
+.tab{flex:1;display:flex;align-items:center;justify-content:flex-start;max-width: 80px; padding: 0 16px; background-color: white; font-size: 14px; border:1px solid #d6e2ee; border-bottom: 0; border-top-right-radius: 10px; cursor:pointer;}
+.tab:first-child{border-right: 0;}
+.tab.active{background:#eef5fb;font-weight:bold}
 #imageArea{
   flex:1;
   position:relative;
@@ -33,13 +34,13 @@ body{margin:0;display:flex;height:100vh;font-family:"MyFont",sans-serif;backgrou
 }
 
 #lines{position:absolute;inset:0;pointer-events:none;}
-.hit{position:absolute;transform:translate(-50%,-50%);background:#fff;border:1px solid #c9d6e2;padding:5px 9px;border-radius:10px;cursor:pointer;}
+.hit{position:absolute;transform:translate(-50%,-50%);background:#fff;border:1px solid #c9d6e2;padding:3px 6px;border-radius:6px; font-size: 14px; cursor:pointer;}
 .hit.active{background:#e8f4ff;}
-.handle{position:absolute;width:14px;height:14px;border-radius:50%;background:white;border:2px solid #4a90e2;transform:translate(-50%,-50%);cursor:pointer;}
-#side{flex:2;border-left:1px solid #d6e2ee;display:flex;flex-direction:column;}
+.handle{position:absolute;width:8px;height:8px;border-radius:50%;background:#4a90e2;transform:translate(-50%,-50%);cursor:pointer;}
+#side{flex:2;border-left:1px solid #d6e2ee; border-top:1px solid #d6e2ee; display:flex;flex-direction:column;margin-top: 36px;}
 .searchWrap {position: relative; width: 100%; height: 36px;}
 #search{width:100%; height: 36px; padding:0 8px;border:none;border-bottom:1px solid #dde7f0;}
-ul{list-style:none;margin:0;padding:0;flex:1;overflow:auto}
+ul{list-style:none;margin:0;padding: 6px;flex:1;overflow:auto}
 li{padding:12px 8px;border-bottom:1px solid #eef2f6;cursor:pointer;position:relative;}
 li.active{background:#eaf4ff}
 .detail{display:none;font-size:13px;color:#666;margin-top:4px}
@@ -68,6 +69,7 @@ li > div:first-child {
   flex-wrap:wrap;
   gap:6px;
   justify-content:center;
+  align-items: center;
 }
 
 button{margin:2px;padding:6px 12px;border-radius:8px;border:none;cursor:pointer;}
@@ -86,7 +88,7 @@ button{margin:2px;padding:6px 12px;border-radius:8px;border:none;cursor:pointer;
 #clearSearch:hover{
   color:#333;
 }
-
+.colorBar {border: 0; border-radius: 8px;}
 </style>
 </head>
 <body>
@@ -116,6 +118,7 @@ button{margin:2px;padding:6px 12px;border-radius:8px;border:none;cursor:pointer;
 <button id="editBtn">편집</button>
 <button id="bgBtn">배경</button>
 <button id="linkBtn">핸들</button>
+<input type="color" class="colorBar" id="handleColorPicker" value="#4a90e2" style="display:none;">
 <button id="pngBtn">PNG</button>
 <button id="jsonOut">공유저장</button>
 <button id="jsonIn">공유불러오기</button>
@@ -145,6 +148,8 @@ const bgInput=document.getElementById("bgInput");
 const jsonFile=document.getElementById("jsonFile");
 const search=document.getElementById("search");
 const clearSearch = document.getElementById("clearSearch");
+const handleColorPicker = document.getElementById("handleColorPicker");
+let handleColor = "#4a90e2"; // 기본 핸들 색상
 
 
 /* 포인트라인생성 */ 
@@ -160,7 +165,22 @@ tabMy.onclick=()=>{mode="my";items=myData;tabMy.classList.add("active"); tabTpl.
 tabTpl.onclick=()=>{mode="tpl";items=tplData;tabTpl.classList.add("active"); tabMy.classList.remove("active"); render();}
 
 /* 편집 */
-editBtn.onclick=()=>{edit=!edit;editBtn.classList.toggle("edit-on",edit);}
+editBtn.onclick = () => {
+  edit = !edit;
+  editBtn.classList.toggle("edit-on", edit);
+  
+  // 편집모드일 때만 색상 선택기 보이기
+  handleColorPicker.style.display = edit ? "inline-block" : "none";
+  
+  render();
+};
+
+handleColorPicker.oninput = (e) => {
+  handleColor = e.target.value;
+  render();
+};
+
+
 
 /* 검색 */
 search.oninput=e=>{searchText=e.target.value.toLowerCase();render();}
@@ -256,10 +276,7 @@ function render(){
   const isMatch = matchedIds.has(it.id);
 
   /* 선 */
-  /* 선 */
 if (showLinks && it.lx !== null) {
-
-
   const sx = it.x / 100 * imageArea.clientWidth;
   const sy = it.y / 100 * imageArea.clientHeight;
   const ex = it.lx / 100 * imageArea.clientWidth;
@@ -269,31 +286,36 @@ if (showLinks && it.lx !== null) {
   const dy = ey - sy;
   const len = Math.hypot(dx, dy) || 1;
 
-  // ⬇️ 겹침 방지 거리
-  const labelOffset = 15;   // 항목 라벨 바깥
-  const handleOffset = 30;  // 핸들 원 바깥
+  // ⬇️ 라벨과 겹치지 않도록 선 시작점/끝점 조절
+  const labelOffset = 10;   // 항목 라벨 바깥으로 선 시작점 띄우기
+  const handleOffset = 30;  // 핸들 바깥으로 선 끝점 띄우기
 
-  const x1 = sx + (dx / len) * labelOffset;
-  const y1 = sy + (dy / len) * labelOffset;
+  const startX = sx + (dx / len) * labelOffset;
+  const startY = sy + (dy / len) * labelOffset;
+  const endX = ex - (dx / len) * handleOffset;
+  const endY = ey - (dy / len) * handleOffset;
 
-  const x2 = ex - (dx / len) * handleOffset;
-  const y2 = ey - (dy / len) * handleOffset;
+  // ⬇️ 곡선용 control point (살짝 아래로 구불구불)
+  const cx = (startX + endX) / 2;
+  const cy = (startY + endY) / 2 + 20; // + 값이 클수록 더 구불구불
 
-  const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
-  line.setAttribute("x1", x1);
-  line.setAttribute("y1", y1);
-  line.setAttribute("x2", x2);
-  line.setAttribute("y2", y2);
-  line.setAttribute("stroke", "#444");
-  line.setAttribute("stroke-width", "2");
+  const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  path.setAttribute("d", `M${startX},${startY} Q${cx},${cy} ${endX},${endY}`);
+  path.setAttribute("stroke", "#444");
+  path.setAttribute("stroke-width", 2);
+  path.setAttribute("fill", "none");
+  // 검색어 매칭 안되면 선도 투명하게
+if(searchText && !isMatch){
+    path.setAttribute("stroke-opacity", 0.25);
+}
 
-  lines.appendChild(line);
-
-   ["start"].forEach(type=>{
+  lines.appendChild(path);
+     ["start"].forEach(type=>{
     const h=document.createElement("div");
     h.className="handle";
     h.style.left=(type==="start"?it.x:it.lx)+"%";
     h.style.top=(type==="start"?it.y:it.ly)+"%";
+    h.style.background = handleColor;
     h.onpointerdown=e=>{
       if(edit && mode==="my"){
         dragItem=it;
@@ -368,13 +390,13 @@ if (showLinks && it.lx !== null) {
   if (!edit) del.style.display = "none";
   const title=document.createElement("div");
   title.textContent=it.name;
-  if(edit){
-   title.onclick=e=>{
+  if(edit && mode==="my"){
+  title.onclick=e=>{
     e.stopPropagation();
     title.contentEditable=true;
     title.focus();
-   };
-  }
+  };
+}
   title.oninput=()=>{it.name=title.textContent; save();};
   title.onblur=()=>title.contentEditable=false;
 
