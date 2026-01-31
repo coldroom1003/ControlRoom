@@ -111,7 +111,16 @@ imageArea.addEventListener("pointerdown", e=>{
   clearFocus();
   if(edit && mode==="my"){
    const r=imageArea.getBoundingClientRect();
-   myData.push({id:Date.now(), name:"항목", desc:"설명", x:(e.clientX-r.left)/r.width*100, y:(e.clientY-r.top)/r.height*100, lx:null, ly:null});
+   myData.push({
+  id: Date.now(),
+  name: "항목",
+  desc: "설명",
+  x: (e.clientX - r.left) / r.width * 100,
+  y: (e.clientY - r.top) / r.height * 100,
+  lx: (e.clientX - r.left) / r.width * 100 + 8,
+  ly: (e.clientY - r.top) / r.height * 100 + 8
+});
+
    save(); render();
   }
  }
@@ -224,12 +233,52 @@ hits.appendChild(d);
   const del=document.createElement("span"); del.className="del"; del.textContent="✕"; del.onclick=e=>{e.stopPropagation(); if(edit && mode==="my") remove(it.id);};
 
   const title=document.createElement("div"); title.textContent=it.name;
-  if(edit) title.onclick=()=>{title.contentEditable=true; title.focus();}
-  title.oninput=()=>{it.name=title.textContent; save();}
+  if (edit) {
+  title.onclick = (e) => {
+    e.stopPropagation();              // 🔥 중요
+    title.contentEditable = true;
+    title.focus();
+  };
+}
 
-  const detail=document.createElement("div"); detail.className="detail"; detail.textContent=it.desc;
-  if(edit) detail.onclick=()=>{detail.contentEditable=true; detail.focus();}
-  detail.oninput=()=>{it.desc=detail.textContent; save();}
+title.oninput = () => {
+  it.name = title.textContent;
+  save();
+};
+
+title.onblur = () => {
+  title.contentEditable = false;
+};
+
+title.onkeydown = e => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    title.blur();
+  }
+};
+
+
+  const detail = document.createElement("div");
+detail.className = "detail";
+detail.textContent = it.desc;
+
+if (edit) {
+  detail.onclick = (e) => {
+    e.stopPropagation();              // 🔥 중요
+    detail.contentEditable = true;
+    detail.focus();
+  };
+}
+
+detail.oninput = () => {
+  it.desc = detail.textContent;
+  save();
+};
+
+detail.onblur = () => {
+  detail.contentEditable = false;
+};
+
   if(it.id===selected) detail.style.display="block";
 
   li.onclick=()=>{selected=it.id; render();};
