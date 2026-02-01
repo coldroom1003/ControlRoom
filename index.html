@@ -1,8 +1,23 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<link rel="manifest" href="manifest.json">
+<script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('service-worker.js')
+    .then(() => console.log('Service Worker 등록됨'))
+    .catch(err => console.log('Service Worker 등록 실패', err));
+}
+</script>
 <style>
-body, .hit, li, input, button {
-    font-family: 'KyoboHandwriting', sans-serif;
-  }
-body{margin:0;display:flex;height:calc(100vh - 16px);background:#fdfefe; padding: 8px;}
+  @font-face {
+  font-family: "MyFont";
+  src: url("./MyFont.woff2") format("woff2");
+}
+body{margin:0;display:flex;height:100vh;font-family:"MyFont",sans-serif;background:#fdfefe;}
 #left{flex:8;display:flex;flex-direction:column}
 .tabs{display:flex;height:36px;background:white;border-bottom:1px solid #d6e2ee;gap: 1px;}
 .tab{flex:1;display:flex;align-items:center;justify-content:flex-start;max-width: 80px; padding: 0 16px; background-color: whitesmoke; border:1px solid #d6e2ee; border-bottom: 0; border-top-right-radius: 10px; cursor:pointer;}
@@ -31,10 +46,10 @@ body{margin:0;display:flex;height:calc(100vh - 16px);background:#fdfefe; padding
 .hit{position:absolute;transform:translate(-50%,-50%);background:#fff;border:1px solid #c9d6e2;padding:3px 6px;border-radius:6px; font-size: 14px; cursor:pointer;}
 .hit.active{background:#e8f4ff;}
 .handle{position:absolute;width:8px;height:8px;border-radius:50%;background:#4a90e2;transform:translate(-50%,-50%);cursor:pointer;}
-#side{flex:2;border-left:1px solid #d6e2ee;display:flex;flex-direction:column;margin-top: 36px;border-top:1px solid #dde7f0;}
-.searchWrap {position: relative; width: calc(100% - 16px); height: 36px;}
-#search{width:100%; height: 36px; padding:0 8px;border:none;}
-ul{list-style:none;margin:0;padding:0;flex:1;overflow:auto; border-top:1px solid #dde7f0;}
+#side{flex:2;border-left:1px solid #d6e2ee;display:flex;flex-direction:column;}
+.searchWrap {position: relative; width: 100%; height: 36px;}
+#search{width:100%; height: 36px; padding:0 8px;border:none;border-bottom:1px solid #dde7f0;}
+ul{list-style:none;margin:0;padding:0;flex:1;overflow:auto}
 li{padding:12px 8px;border-bottom:1px solid #eef2f6;cursor:pointer;position:relative;}
 li.active{background:#eaf4ff}
 .detail{display:none;font-size:13px;color:#666;margin-top:4px}
@@ -63,7 +78,6 @@ li > div:first-child {
   flex-wrap:wrap;
   gap:6px;
   justify-content:center;
-  align-items: center;
 }
 
 button{margin:2px;padding:6px 12px;border-radius:8px;border:none;cursor:pointer;}
@@ -82,6 +96,411 @@ button{margin:2px;padding:6px 12px;border-radius:8px;border:none;cursor:pointer;
 #clearSearch:hover{
   color:#333;
 }
-.colorPicker {border: 0; border-radius: 8px;}
 
 </style>
+</head>
+<body>
+
+<div id="left">
+<div class="tabs">
+<div id="tabMy" class="tab active">내 작업</div>
+<div id="tabTpl" class="tab">템플릿</div>
+</div>
+
+<div id="imageArea">
+<div id="canvas"></div>
+<svg id="lines"></svg>
+<div id="hits"></div>
+</div>
+</div>
+
+<div id="side">
+<div class="searchWrap">
+  <input id="search" placeholder="검색어를 입력하세요.">
+  <span id="clearSearch">✕</span>
+</div>
+<ul id="list"></ul>
+</div>
+
+<div id="bar">
+<button id="editBtn">편집</button>
+<button id="bgBtn">배경</button>
+<button id="linkBtn">핸들</button>
+<button id="pngBtn">PNG</button>
+<button id="jsonOut">공유저장</button>
+<button id="jsonIn">공유불러오기</button>
+<input type="file" id="bgInput" hidden accept="image/*">
+<input type="file" id="jsonFile" hidden accept=".json">
+<!-- 바 버튼 옆에 색상 선택 -->
+<input type="color" id="handleColorPicker" value="#4a90e2" style="display:none;">
+
+</div>
+
+<script>
+let myData=JSON.parse(localStorage.getItem("myData")||"[]");
+let tplData=[];
+let items=myData;
+
+let edit=false, selected=null, mode="my", searchText="";
+let showLinks = true; // ← 선 + 포인트핸들 표시 여부
+const hits=document.getElementById("hits");
+const list=document.getElementById("list");
+const canvas=document.getElementById("canvas");
+const lines=document.getElementById("lines");
+const imageArea=document.getElementById("imageArea");
+const editBtn=document.getElementById("editBtn");
+const linkBtn = document.getElementById("linkBtn");
+const bgBtn=document.getElementById("bgBtn");
+const pngBtn=document.getElementById("pngBtn");
+const jsonOut=document.getElementById("jsonOut");
+const jsonIn=document.getElementById("jsonIn");
+const bgInput=document.getElementById("bgInput");
+const jsonFile=document.getElementById("jsonFile");
+const search=document.getElementById("search");
+const clearSearch = document.getElementById("clearSearch");
+const handleColorPicker = document.getElementById("handleColorPicker");
+let handleColor = localStorage.getItem("handleColor") || "#4a90e2";
+handleColorPicker.value = handleColor; // 로컬스토리지에서 불러오기
+
+
+
+/* 포인트라인생성 */ 
+
+linkBtn.onclick = () => {
+  showLinks = !showLinks;
+  linkBtn.textContent = showLinks ? "라인 숨김" : "라인 표시";
+  render();
+};
+
+/* 탭 */
+tabMy.onclick=()=>{mode="my";items=myData;tabMy.classList.add("active"); tabTpl.classList.remove("active"); render();}
+tabTpl.onclick=()=>{mode="tpl";items=tplData;tabTpl.classList.add("active"); tabMy.classList.remove("active"); render();}
+
+/* 편집 */
+editBtn.onclick = () => {
+  edit = !edit;
+  editBtn.classList.toggle("edit-on", edit);
+  
+  // 편집모드일 때만 색상 선택기 보이기
+  handleColorPicker.style.display = edit ? "inline-block" : "none";
+  
+  render();
+};
+
+handleColorPicker.oninput = (e) => {
+  handleColor = e.target.value;
+  localStorage.setItem("handleColor", handleColor);
+  render();
+};
+
+
+
+
+/* 검색 */
+search.oninput=e=>{searchText=e.target.value.toLowerCase();render();}
+search.addEventListener("input", () => {
+  clearSearch.style.display = search.value ? "block" : "none";
+});
+
+/* 배경 */
+bgBtn.onclick=()=>{if(edit) bgInput.click();}
+bgInput.onchange=e=>{
+ const f=e.target.files[0]; if(!f)return;
+ const r=new FileReader();
+ r.onload=()=>{canvas.style.backgroundImage=`url(${r.result})`; localStorage.setItem("bg",r.result);}
+ r.readAsDataURL(f);
+};
+const bg=localStorage.getItem("bg"); if(bg) canvas.style.backgroundImage=`url(${bg})`;
+
+/* 저장/삭제 */
+function save(){localStorage.setItem("myData",JSON.stringify(myData));}
+function remove(id){myData=myData.filter(x=>x.id!==id); items=myData; save(); render();}
+
+/* 포커스 해제 */
+function clearFocus(){selected=null; render();}
+
+/* 배경 클릭 */
+imageArea.addEventListener("pointerdown", e=>{
+ if(e.target===imageArea||e.target===canvas){
+  clearFocus();
+  if(edit && mode==="my"){
+   const r=imageArea.getBoundingClientRect();
+   const px = (e.clientX - r.left) / r.width * 100;
+const py = (e.clientY - r.top) / r.height * 100;
+
+myData.push({
+  id: Date.now(),
+  name: "항목",
+  desc: "설명",
+  x: px,
+  y: py,
+  lx: showLinks ? px + 8 : null,
+  ly: showLinks ? py + 8 : null
+});
+
+   save(); render();
+  }
+ }
+});
+
+/* 드래그 */
+let dragItem=null, dragType=null;
+document.addEventListener("pointermove", e=>{
+ if(!dragItem) return;
+ if(!edit || mode!=="my") return;
+ const r=imageArea.getBoundingClientRect();
+ const x=(e.clientX-r.left)/r.width*100;
+ const y=(e.clientY-r.top)/r.height*100;
+ if(dragType==="item"){if(dragItem.lx!==null){dragItem.lx=x; dragItem.ly=y;} else{dragItem.x=x; dragItem.y=y;}}
+ if(dragType==="start"){dragItem.x=x; dragItem.y=y;}
+ if(dragType==="end"){dragItem.lx=x; dragItem.ly=y;}
+ save(); render();
+});
+document.addEventListener("pointerup",()=>dragItem=null);
+
+/* =======================
+   렌더 (여기만 수정됨)
+   ======================= */
+function render(){
+ hits.innerHTML="";
+ list.innerHTML="";
+ lines.innerHTML="";
+ lines.setAttribute("width",imageArea.clientWidth);
+ lines.setAttribute("height",imageArea.clientHeight);
+
+ /* 🔍 [추가] 검색 매칭 ID */
+ const matchedIds = new Set(
+   items
+     .filter(it =>
+       it.name.toLowerCase().includes(searchText) ||
+       it.desc.toLowerCase().includes(searchText)
+     )
+     .map(it => it.id)
+ );
+
+ /* 📋 리스트용 필터 */
+ const filtered = searchText
+   ? items.filter(it => matchedIds.has(it.id))
+   : items;
+
+ /* ===== 그림은 전체 items 기준 ===== */
+ items.forEach(it=>{
+  const hx=it.lx??it.x;
+  const hy=it.ly??it.y;
+  const isMatch = matchedIds.has(it.id);
+
+  /* 선 */
+/* 선 */
+if (showLinks && it.lx !== null) {
+  const sx = it.x / 100 * imageArea.clientWidth;
+  const sy = it.y / 100 * imageArea.clientHeight;
+  const ex = it.lx / 100 * imageArea.clientWidth;
+  const ey = it.ly / 100 * imageArea.clientHeight;
+
+  const dx = ex - sx;
+  const dy = ey - sy;
+  const len = Math.hypot(dx, dy) || 1;
+
+  const labelOffset = 15;   
+  const handleOffset = 30;  
+
+  const x1 = sx + (dx / len) * labelOffset;
+  const y1 = sy + (dy / len) * labelOffset;
+  const x2 = ex - (dx / len) * handleOffset;
+  const y2 = ey - (dy / len) * handleOffset;
+
+  const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+  line.setAttribute("x1", x1);
+  line.setAttribute("y1", y1);
+  line.setAttribute("x2", x2);
+  line.setAttribute("y2", y2);
+  line.setAttribute("stroke", "#444");
+  line.setAttribute("stroke-width", "2");
+  // 🔹 검색 미매칭이면 투명도 낮추기
+  line.setAttribute("opacity", isMatch ? "1" : "0.25");
+
+  lines.appendChild(line);
+
+  ["start"].forEach(type=>{
+    const h = document.createElement("div");
+    h.className="handle";
+    h.style.left = (type==="start"?it.x:it.lx) + "%";
+    h.style.top  = (type==="start"?it.y:it.ly) + "%";
+    h.style.background = handleColor;
+    // 🔹 검색 미매칭이면 투명도 낮추기
+    h.style.opacity = isMatch ? "1" : "0.25";
+
+    h.onpointerdown = e=>{
+      if(edit && mode==="my"){
+        dragItem=it;
+        dragType=type;
+        e.stopPropagation();
+      }
+    };
+    hits.appendChild(h);
+  });
+}
+
+  /* 항목 */
+  const d=document.createElement("div");
+  d.className=
+    "hit"+
+    (it.id===selected?" active":"")+
+    (searchText && isMatch?" search-hit":"");
+
+  if (searchText && !isMatch) {
+    d.style.opacity="0.25";
+  }
+
+  d.style.left=hx+"%";
+  d.style.top=hy+"%";
+  d.textContent=it.name;
+
+  let lastTap=0;
+  d.onpointerdown=e=>{
+   e.stopPropagation();
+   const now=Date.now();
+   selected=it.id;
+
+   if(edit && mode==="my" && now-lastTap<300){
+    if(it.lx===null){
+     it.lx=it.x+10; it.ly=it.y+10;
+    }else{
+     it.lx=null; it.ly=null;
+    }
+    save(); render(); return;
+   }
+   lastTap=now;
+
+   if(edit && mode==="my"){
+    dragItem=it; dragType="item";
+   }
+   render();
+  };
+
+  d.oncontextmenu=e=>{
+   e.preventDefault();
+   if(!edit||mode!=="my")return;
+   const v=prompt("이름 수정",it.name);
+   if(v!==null){it.name=v; save(); render();}
+  };
+
+  hits.appendChild(d);
+ });
+
+ /* ===== 리스트는 filtered 기준 ===== */
+ filtered.forEach(it=>{
+  const li=document.createElement("li");
+  li.style.paddingRight = "32px";
+  if(it.id===selected) li.className="active";
+
+  const del=document.createElement("span");
+  del.className="del";
+  del.textContent="✕";
+  del.onclick=e=>{
+    e.stopPropagation();
+    if(edit && mode==="my") remove(it.id);
+  };
+  if (!edit) del.style.display = "none";
+  const title=document.createElement("div");
+  title.textContent=it.name;
+  if(edit && mode==="my"){
+  title.onclick=e=>{
+    e.stopPropagation();
+    title.contentEditable=true;
+    title.focus();
+  };
+}
+  title.oninput=()=>{it.name=title.textContent; save();};
+  title.onblur=()=>title.contentEditable=false;
+
+  const detail=document.createElement("div");
+  detail.className="detail";
+  detail.textContent=it.desc;
+  if(edit){
+   detail.onclick=e=>{
+    e.stopPropagation();
+    detail.contentEditable=true;
+    detail.focus();
+   };
+  }
+  detail.oninput=()=>{it.desc=detail.textContent; save();};
+  detail.onblur=()=>detail.contentEditable=false;
+
+  if(it.id===selected || searchText){
+    detail.style.display="block";
+  }
+
+  li.onclick = (e) => {
+  if (edit && e.target !== li) return; // 타이틀/디테일 클릭은 무시
+  selected = it.id;
+  render();
+};
+
+  li.appendChild(del);
+  li.appendChild(title);
+  li.appendChild(detail);
+  list.appendChild(li);
+ });
+}
+
+/* PNG */
+pngBtn.onclick = () => {
+  const name = prompt("이미지 파일 이름을 입력하세요", "map");
+  if (!name) return;
+
+  html2canvas(imageArea).then(c => {
+    const a = document.createElement("a");
+    a.href = c.toDataURL();
+    a.download = name + ".png";
+    a.click();
+  });
+};
+
+/* JSON */
+jsonOut.onclick = () => {
+  const name = prompt("파일 이름을 입력하세요", "map");
+  if (!name) return;
+
+  const jsonBlob = new Blob(
+    [JSON.stringify(myData, null, 2)],
+    { type: "application/json" }
+  );
+
+  const jsonUrl = URL.createObjectURL(jsonBlob);
+  const jsonA = document.createElement("a");
+  jsonA.href = jsonUrl;
+  jsonA.download = name + ".json";
+  document.body.appendChild(jsonA);
+  jsonA.click();
+  document.body.removeChild(jsonA);
+  URL.revokeObjectURL(jsonUrl);
+};
+
+
+jsonIn.onclick=()=>jsonFile.click();
+jsonFile.onchange=e=>{
+ const f=e.target.files[0]; if(!f)return;
+ const r=new FileReader();
+ r.onload=()=>{
+  tplData=JSON.parse(r.result);
+  mode="tpl"; items=tplData;
+  tabTpl.classList.add("active");
+  tabMy.classList.remove("active");
+  render();
+ };
+ r.readAsText(f);
+};
+
+render();
+clearSearch.onclick = () => {
+  search.value = "";
+  searchText = "";
+  clearSearch.style.display = "none";
+  render();
+};
+
+</script>
+
+</body>
+</html>
