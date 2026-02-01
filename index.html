@@ -15,23 +15,25 @@ body{margin:0;display:flex;height:100vh;font-family:"MyFont",sans-serif;backgrou
 .tab{flex:1;display:flex;align-items:center;justify-content:flex-start;max-width: 80px; padding: 0 16px; background-color: white; font-size: 14px; border:1px solid #d6e2ee; border-bottom: 0; border-top-right-radius: 10px; cursor:pointer;}
 .tab:first-child{border-right: 0;}
 .tab.active{background:#eef5fb;font-weight:bold}
-#imageArea{
-  flex:1;
-  position:relative;
-  background:#f7fafc;
-  overflow:hidden;
-  display:flex;
-  align-items:center;
-  justify-content:center;
+#imageArea {
+  flex: 1;
+  position: relative;
+  background: #f7fafc;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  max-height: 100vh;   /* 화면 높이를 최대값으로 */
 }
 
 #canvas {
-  position:absolute;
-  inset:0;
-  background-position:center;
-  background-repeat:no-repeat;
-  background-size:contain;
+  max-width: 100%;
+  max-height: 100%;    /* 화면 안에서 비율 유지 */
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: contain;
 }
+
 
 #lines{position:absolute;inset:0;pointer-events:none;}
 .hit{position:absolute;transform:translate(-50%,-50%);background:#fff;border:1px solid #c9d6e2;padding:3px 6px;border-radius:6px; font-size: 14px; cursor:pointer;}
@@ -39,7 +41,7 @@ body{margin:0;display:flex;height:100vh;font-family:"MyFont",sans-serif;backgrou
 .handle{position:absolute;width:8px;height:8px;border-radius:50%;background:#4a90e2;transform:translate(-50%,-50%);cursor:pointer;}
 #side{flex:2;border-left:1px solid #d6e2ee; border-top:1px solid #d6e2ee; display:flex;flex-direction:column;margin-top: 36px;}
 .searchWrap {position: relative; width: 100%; height: 36px;}
-#search{width:100%; height: 36px; padding:0 8px;border:none;border-bottom:1px solid #dde7f0;}
+#search{width:100%; height: 36px; padding:0 0 0 8px;border:none;border-bottom:1px solid #dde7f0;}
 ul{list-style:none;margin:0;padding: 6px;flex:1;overflow:auto}
 li{padding:12px 8px;border-bottom:1px solid #eef2f6;cursor:pointer;position:relative;}
 li.active{background:#eaf4ff}
@@ -149,7 +151,9 @@ const jsonFile=document.getElementById("jsonFile");
 const search=document.getElementById("search");
 const clearSearch = document.getElementById("clearSearch");
 const handleColorPicker = document.getElementById("handleColorPicker");
-let handleColor = "#4a90e2"; // 기본 핸들 색상
+let handleColor = localStorage.getItem("handleColor") || "#4a90e2";
+handleColorPicker.value = handleColor; // 선택기에도 반영
+
 
 
 /* 포인트라인생성 */ 
@@ -177,8 +181,10 @@ editBtn.onclick = () => {
 
 handleColorPicker.oninput = (e) => {
   handleColor = e.target.value;
+  localStorage.setItem("handleColor", handleColor); // 저장
   render();
 };
+
 
 
 
@@ -276,6 +282,7 @@ function render(){
   const isMatch = matchedIds.has(it.id);
 
   /* 선 */
+/* 선 */
 if (showLinks && it.lx !== null) {
   const sx = it.x / 100 * imageArea.clientWidth;
   const sy = it.y / 100 * imageArea.clientHeight;
@@ -286,37 +293,36 @@ if (showLinks && it.lx !== null) {
   const dy = ey - sy;
   const len = Math.hypot(dx, dy) || 1;
 
-  // ⬇️ 라벨과 겹치지 않도록 선 시작점/끝점 조절
-  const labelOffset = 10;   // 항목 라벨 바깥으로 선 시작점 띄우기
-  const handleOffset = 30;  // 핸들 바깥으로 선 끝점 띄우기
+  const labelOffset = 15;   
+  const handleOffset = 30;  
 
-  const startX = sx + (dx / len) * labelOffset;
-  const startY = sy + (dy / len) * labelOffset;
-  const endX = ex - (dx / len) * handleOffset;
-  const endY = ey - (dy / len) * handleOffset;
+  const x1 = sx + (dx / len) * labelOffset;
+  const y1 = sy + (dy / len) * labelOffset;
+  const x2 = ex - (dx / len) * handleOffset;
+  const y2 = ey - (dy / len) * handleOffset;
 
-  // ⬇️ 곡선용 control point (살짝 아래로 구불구불)
-  const cx = (startX + endX) / 2;
-  const cy = (startY + endY) / 2 + 20; // + 값이 클수록 더 구불구불
+  const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+  line.setAttribute("x1", x1);
+  line.setAttribute("y1", y1);
+  line.setAttribute("x2", x2);
+  line.setAttribute("y2", y2);
+  line.setAttribute("stroke", "#444");
+  line.setAttribute("stroke-width", "2");
+  // 🔹 검색 미매칭이면 투명도 낮추기
+  line.setAttribute("opacity", isMatch ? "1" : "0.25");
 
-  const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-  path.setAttribute("d", `M${startX},${startY} Q${cx},${cy} ${endX},${endY}`);
-  path.setAttribute("stroke", "#444");
-  path.setAttribute("stroke-width", 2);
-  path.setAttribute("fill", "none");
-  // 검색어 매칭 안되면 선도 투명하게
-if(searchText && !isMatch){
-    path.setAttribute("stroke-opacity", 0.25);
-}
+  lines.appendChild(line);
 
-  lines.appendChild(path);
-     ["start"].forEach(type=>{
-    const h=document.createElement("div");
+  ["start"].forEach(type=>{
+    const h = document.createElement("div");
     h.className="handle";
-    h.style.left=(type==="start"?it.x:it.lx)+"%";
-    h.style.top=(type==="start"?it.y:it.ly)+"%";
+    h.style.left = (type==="start"?it.x:it.lx) + "%";
+    h.style.top  = (type==="start"?it.y:it.ly) + "%";
     h.style.background = handleColor;
-    h.onpointerdown=e=>{
+    // 🔹 검색 미매칭이면 투명도 낮추기
+    h.style.opacity = isMatch ? "1" : "0.25";
+
+    h.onpointerdown = e=>{
       if(edit && mode==="my"){
         dragItem=it;
         dragType=type;
@@ -324,8 +330,8 @@ if(searchText && !isMatch){
       }
     };
     hits.appendChild(h);
-   });
-  }
+  });
+}
 
   /* 항목 */
   const d=document.createElement("div");
