@@ -12,37 +12,36 @@
 body{margin:0;display:flex;height:100vh;font-family:"MyFont",sans-serif;background:#fdfefe;}
 #left{flex:8;display:flex;flex-direction:column}
 .tabs{display:flex;height:36px;background:white;border-bottom:1px solid #d6e2ee;gap: 1px;}
-.tab{flex:1;display:flex;align-items:center;justify-content:flex-start;max-width: 80px; padding: 0 16px; background-color: white; font-size: 14px; border:1px solid #d6e2ee; border-bottom: 0; border-top-right-radius: 10px; cursor:pointer;}
+.tab{flex:1;display:flex;align-items:center;justify-content:flex-start;max-width: 80px; padding: 0 16px; background-color: whitesmoke; border:1px solid #d6e2ee; border-bottom: 0; border-top-right-radius: 10px; cursor:pointer;}
 .tab:first-child{border-right: 0;}
 .tab.active{background:#eef5fb;font-weight:bold}
-#imageArea {
-  flex: 1;
-  position: relative;
-  background: #f7fafc;
-  overflow: hidden;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  max-height: 100vh;   /* 화면 높이를 최대값으로 */
+#imageArea{
+  flex:1;
+  position:relative;
+  background:#f7fafc;
+  overflow:hidden;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  height: 100vh;
 }
 
 #canvas {
-  max-width: 100%;
-  max-height: 100%;    /* 화면 안에서 비율 유지 */
-  background-position: center;
-  background-repeat: no-repeat;
-  background-size: contain;
+  position:absolute;
+  inset:0;
+  background-position:center;
+  background-repeat:no-repeat;
+  background-size:contain;
 }
-
 
 #lines{position:absolute;inset:0;pointer-events:none;}
 .hit{position:absolute;transform:translate(-50%,-50%);background:#fff;border:1px solid #c9d6e2;padding:3px 6px;border-radius:6px; font-size: 14px; cursor:pointer;}
 .hit.active{background:#e8f4ff;}
 .handle{position:absolute;width:8px;height:8px;border-radius:50%;background:#4a90e2;transform:translate(-50%,-50%);cursor:pointer;}
-#side{flex:2;border-left:1px solid #d6e2ee; border-top:1px solid #d6e2ee; display:flex;flex-direction:column;margin-top: 36px;}
+#side{flex:2;border-left:1px solid #d6e2ee;display:flex;flex-direction:column;}
 .searchWrap {position: relative; width: 100%; height: 36px;}
-#search{width:100%; height: 36px; padding:0 0 0 8px;border:none;border-bottom:1px solid #dde7f0;}
-ul{list-style:none;margin:0;padding: 6px;flex:1;overflow:auto}
+#search{width:100%; height: 36px; padding:0 8px;border:none;border-bottom:1px solid #dde7f0;}
+ul{list-style:none;margin:0;padding:0;flex:1;overflow:auto}
 li{padding:12px 8px;border-bottom:1px solid #eef2f6;cursor:pointer;position:relative;}
 li.active{background:#eaf4ff}
 .detail{display:none;font-size:13px;color:#666;margin-top:4px}
@@ -71,7 +70,6 @@ li > div:first-child {
   flex-wrap:wrap;
   gap:6px;
   justify-content:center;
-  align-items: center;
 }
 
 button{margin:2px;padding:6px 12px;border-radius:8px;border:none;cursor:pointer;}
@@ -90,7 +88,7 @@ button{margin:2px;padding:6px 12px;border-radius:8px;border:none;cursor:pointer;
 #clearSearch:hover{
   color:#333;
 }
-.colorBar {border: 0; border-radius: 8px;}
+
 </style>
 </head>
 <body>
@@ -120,12 +118,14 @@ button{margin:2px;padding:6px 12px;border-radius:8px;border:none;cursor:pointer;
 <button id="editBtn">편집</button>
 <button id="bgBtn">배경</button>
 <button id="linkBtn">핸들</button>
-<input type="color" class="colorBar" id="handleColorPicker" value="#4a90e2" style="display:none;">
 <button id="pngBtn">PNG</button>
 <button id="jsonOut">공유저장</button>
 <button id="jsonIn">공유불러오기</button>
 <input type="file" id="bgInput" hidden accept="image/*">
 <input type="file" id="jsonFile" hidden accept=".json">
+<!-- 바 버튼 옆에 색상 선택 -->
+<input type="color" id="handleColorPicker" value="#4a90e2" style="display:none;">
+
 </div>
 
 <script>
@@ -152,7 +152,7 @@ const search=document.getElementById("search");
 const clearSearch = document.getElementById("clearSearch");
 const handleColorPicker = document.getElementById("handleColorPicker");
 let handleColor = localStorage.getItem("handleColor") || "#4a90e2";
-handleColorPicker.value = handleColor; // 선택기에도 반영
+handleColorPicker.value = handleColor; // 로컬스토리지에서 불러오기
 
 
 
@@ -181,7 +181,7 @@ editBtn.onclick = () => {
 
 handleColorPicker.oninput = (e) => {
   handleColor = e.target.value;
-  localStorage.setItem("handleColor", handleColor); // 저장
+  localStorage.setItem("handleColor", handleColor);
   render();
 };
 
