@@ -8,6 +8,9 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="apple-touch-icon" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;700&display=swap" rel="stylesheet">
 
 <script>
 if ('serviceWorker' in navigator) {
@@ -17,17 +20,10 @@ if ('serviceWorker' in navigator) {
 }
 </script>
 <style>
-  @font-face {
-  font-family: 'KyoboHandwriting2024psw';
-  src: url('./KyoboHandwriting2024psw.woff2') format('woff2'),
-       url('./KyoboHandwriting2024psw.woff') format('woff');
-  font-weight: normal;
-  font-style: normal;
-}
 
 /* 전체 텍스트에 폰트 적용 */
 body, .hit, li, input, button {
-  font-family: 'KyoboHandwriting2024psw', sans-serif;
+  font-family: 'Poppins', sans-serif; /* 인터넷 연결 시 Poppins, 없으면 기본 sans-serif */
 }
 body{margin:0;display:flex;height:calc(100vh - 12px);background:#fdfefe;padding: 6px;}
 #left{flex:8;display:flex;flex-direction:column}
@@ -461,15 +457,13 @@ pngBtn.onclick = async () => {
   const name = prompt("이미지 파일 이름을 입력하세요", "map");
   if (!name) return;
 
-  // 🔹 폰트 로딩 완료 대기
-  await document.fonts.ready;
-
-  html2canvas(imageArea).then(c => {
+  await document.fonts.ready; // 폰트 로드 대기
+html2canvas(imageArea, { useCORS: true, allowTaint: true }).then(c => {
     const a = document.createElement("a");
     a.href = c.toDataURL();
     a.download = name + ".png";
     a.click();
-  });
+});
 };
 
 
