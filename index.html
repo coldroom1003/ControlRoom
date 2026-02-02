@@ -474,14 +474,122 @@ pngBtn.onclick = async () => {
   const name = prompt("이미지 파일 이름을 입력하세요", "map");
   if (!name) return;
 
-  await document.fonts.ready; // 폰트 로드 대기
-html2canvas(imageArea, { useCORS: true, allowTaint: true }).then(c => {
+  const scale = 3; // ⭐ 화질 (2~4 가능)
+
+  const rect = imageArea.getBoundingClientRect();
+
+  const exportCanvas = document.createElement("canvas");
+  exportCanvas.width = rect.width * scale;
+  exportCanvas.height = rect.height * scale;
+
+  const ctx = exportCanvas.getContext("2d");
+  ctx.scale(scale, scale);
+
+  // 배경색
+  ctx.fillStyle = "#f7fafc";
+  ctx.fillRect(0, 0, rect.width, rect.height);
+
+  // 배경 이미지
+  const bg = canvas.style.backgroundImage;
+  if (bg && bg.startsWith("url")) {
+    const url = bg.slice(5, -2);
+    const img = new Image();
+    img.src = url;
+    await img.decode();
+
+    const imgRatio = img.width / img.height;
+const areaRatio = rect.width / rect.height;
+
+let drawW, drawH, offsetX, offsetY;
+
+if (imgRatio > areaRatio) {
+  drawW = rect.width;
+  drawH = rect.width / imgRatio;
+} else {
+  drawH = rect.height;
+  drawW = rect.height * imgRatio;
+}
+
+/* 🔥 bgScale 반영 */
+drawW *= bgScale;
+drawH *= bgScale;
+
+/* 🔥 중앙 기준으로 스케일 */
+offsetX = (rect.width - drawW) / 2;
+offsetY = (rect.height - drawH) / 2;
+
+ctx.drawImage(img, offsetX, offsetY, drawW, drawH);
+/* 🔵 핸들 포인트 (텍스트 쪽에 달기) */
+items.forEach(it => {
+  if (!showLinks || it.lx === null) return;
+
+  const x = it.x / 100 * rect.width;
+  const y = it.y / 100 * rect.height;
+
+  ctx.beginPath();
+  const r = 6 / scale; // ⭐ 화면과 동일한 크기
+ctx.arc(x, y, r, 0, Math.PI * 2);
+
+  ctx.fillStyle = handleColor;
+  ctx.fill();
+});
+
+  }
+
+  // SVG 선 그리기
+  // SVG 선 그리기 (화면 거리 유지)
+items.forEach(it => {
+  if (!showLinks || it.lx === null) return;
+
+  const sx = it.x / 100 * rect.width;
+  const sy = it.y / 100 * rect.height;
+  const ex = it.lx / 100 * rect.width;
+  const ey = it.ly / 100 * rect.height;
+
+  const dx = ex - sx;
+  const dy = ey - sy;
+  const len = Math.hypot(dx, dy) || 1;
+
+  // ⭐ 화면에서 쓰던 거리값이랑 맞추기
+  const labelOffset = 15;   // 텍스트에서 떨어진 거리
+  const handleOffset = 30;  // 핸들에서 떨어진 거리
+
+  const x1 = sx + (dx / len) * labelOffset;
+  const y1 = sy + (dy / len) * labelOffset;
+  const x2 = ex - (dx / len) * handleOffset;
+  const y2 = ey - (dy / len) * handleOffset;
+
+  ctx.strokeStyle = "#444";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(x1, y1);
+  ctx.lineTo(x2, y2);
+  ctx.stroke();
+});
+
+
+  // 라벨
+  ctx.fillStyle = "#000";
+  ctx.font = "14px 'Playwrite NZ Basic', cursive";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+
+  items.forEach(it => {
+    const x = (it.lx ?? it.x) / 100 * rect.width;
+    const y = (it.ly ?? it.y) / 100 * rect.height;
+
+    ctx.fillText(it.name, x, y);
+  });
+
+  exportCanvas.toBlob(blob => {
     const a = document.createElement("a");
-    a.href = c.toDataURL();
+    a.href = URL.createObjectURL(blob);
     a.download = name + ".png";
     a.click();
-});
+    URL.revokeObjectURL(a.href);
+  });
 };
+
 
 
 /* JSON */
