@@ -48,6 +48,7 @@ body{margin:0;display:flex;height:calc(100vh - 12px);background:#fdfefe;padding:
   background-position:center;
   background-repeat:no-repeat;
   background-size:contain;
+  transform-origin: center center; /* ⭐ 중요 */
 }
 
 #lines{position:absolute;inset:0;pointer-events:none;}
@@ -141,6 +142,15 @@ button{margin:2px;padding:6px 12px;border-radius:8px;border:none;cursor:pointer;
 <button id="jsonIn">공유불러오기</button>
 <input type="file" id="bgInput" hidden accept="image/*">
 <input type="file" id="jsonFile" hidden accept=".json">
+<input
+  type="range"
+  id="bgScale"
+  min="0.2"
+  max="2"
+  step="0.01"
+  value="1"
+  style="display:none;"
+>
 
 </div>
 
@@ -169,6 +179,8 @@ const clearSearch = document.getElementById("clearSearch");
 const handleColorPicker = document.getElementById("handleColorPicker");
 let handleColor = localStorage.getItem("handleColor") || "#4a90e2";
 handleColorPicker.value = handleColor; // 로컬스토리지에서 불러오기
+let bgScale = Number(localStorage.getItem("bgScale") || 1);
+
 
 
 
@@ -185,15 +197,18 @@ tabMy.onclick=()=>{mode="my";items=myData;tabMy.classList.add("active"); tabTpl.
 tabTpl.onclick=()=>{mode="tpl";items=tplData;tabTpl.classList.add("active"); tabMy.classList.remove("active"); render();}
 
 /* 편집 */
+const bgScaleInput = document.getElementById("bgScale");
+
 editBtn.onclick = () => {
   edit = !edit;
   editBtn.classList.toggle("edit-on", edit);
-  
-  // 편집모드일 때만 색상 선택기 보이기
+
   handleColorPicker.style.display = edit ? "inline-block" : "none";
-  
+  bgScaleInput.style.display = edit ? "inline-block" : "none";
+
   render();
 };
+
 
 handleColorPicker.oninput = (e) => {
   handleColor = e.target.value;
@@ -219,6 +234,8 @@ bgInput.onchange=e=>{
  r.readAsDataURL(f);
 };
 const bg=localStorage.getItem("bg"); if(bg) canvas.style.backgroundImage=`url(${bg})`;
+canvas.style.transform = `scale(${bgScale})`;
+
 
 /* 저장/삭제 */
 function save(){localStorage.setItem("myData",JSON.stringify(myData));}
@@ -508,6 +525,14 @@ clearSearch.onclick = () => {
   searchText = "";
   clearSearch.style.display = "none";
   render();
+};
+
+bgScaleInput.value = bgScale;
+
+bgScaleInput.oninput = (e) => {
+  bgScale = e.target.value;
+  canvas.style.transform = `scale(${bgScale})`;
+  localStorage.setItem("bgScale", bgScale);
 };
 
 </script>
