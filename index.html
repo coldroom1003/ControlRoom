@@ -180,7 +180,7 @@ const handleColorPicker = document.getElementById("handleColorPicker");
 let handleColor = localStorage.getItem("handleColor") || "#4a90e2";
 handleColorPicker.value = handleColor; // 로컬스토리지에서 불러오기
 let bgScale = Number(localStorage.getItem("bgScale") || 1);
-
+const DPR = window.devicePixelRatio || 1;
 
 
 
@@ -541,9 +541,9 @@ items.forEach(it => {
   const y = it.y / 100 * rect.height;
 
   ctx.beginPath();
-  const r = 6 / scale; // ⭐ 화면과 동일한 크기
-ctx.arc(x, y, r, 0, Math.PI * 2);
+const HANDLE_RADIUS = 6 / DPR;
 
+ctx.arc(x, y, HANDLE_RADIUS, 0, Math.PI * 2);
   ctx.fillStyle = handleColor;
   ctx.fill();
 });
@@ -574,7 +574,7 @@ items.forEach(it => {
   const y2 = ey - (dy / len) * handleOffset;
 
   ctx.strokeStyle = "#444";
-  ctx.lineWidth = 2;
+  ctx.lineWidth = 2/DPR;
   ctx.beginPath();
   ctx.moveTo(x1, y1);
   ctx.lineTo(x2, y2);
