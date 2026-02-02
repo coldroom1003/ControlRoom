@@ -282,6 +282,18 @@ document.addEventListener("pointermove", e=>{
  save(); render();
 });
 document.addEventListener("pointerup",()=>dragItem=null);
+function scrollToSelectedListItem() {
+  if (!selected) return;
+
+  const li = list.querySelector(`li[data-id="${selected}"]`);
+  if (!li) return;
+
+  li.scrollIntoView({
+    behavior: "smooth",
+    block: "center"
+  });
+}
+
 
 /* =======================
    렌더 (여기만 수정됨)
@@ -401,6 +413,7 @@ if (showLinks && it.lx !== null) {
     dragItem=it; dragType="item";
    }
    render();
+    scrollToSelectedListItem(); // ⭐ 추가
   };
 
   d.oncontextmenu=e=>{
@@ -416,6 +429,7 @@ if (showLinks && it.lx !== null) {
  /* ===== 리스트는 filtered 기준 ===== */
  filtered.forEach(it=>{
   const li=document.createElement("li");
+  li.dataset.id = it.id;
   li.style.paddingRight = "32px";
   if(it.id===selected) li.className="active";
 
@@ -613,19 +627,56 @@ jsonOut.onclick = () => {
 };
 
 
-jsonIn.onclick=()=>jsonFile.click();
-jsonFile.onchange=e=>{
- const f=e.target.files[0]; if(!f)return;
- const r=new FileReader();
- r.onload=()=>{
-  tplData=JSON.parse(r.result);
-  mode="tpl"; items=tplData;
-  tabTpl.classList.add("active");
-  tabMy.classList.remove("active");
-  render();
- };
- r.readAsText(f);
+jsonIn.onclick = () => {
+  if (mode !== "my") {
+    alert("내 작업 탭에서만 불러올 수 있어요");
+    return;
+  }
+  jsonFile.click();
 };
+
+jsonFile.onchange = e => {
+  const f = e.target.files[0];
+  if (!f) return;
+
+  const r = new FileReader();
+  r.onload = () => {
+    let incoming;
+    try {
+      incoming = JSON.parse(r.result);
+      if (!Array.isArray(incoming)) throw new Error();
+    } catch {
+      alert("올바른 JSON 파일이 아니에요");
+      return;
+    }
+
+    const choice = confirm(
+      "확인: 현재 작업에 추가\n취소: 현재 작업 덮어쓰기"
+    );
+
+    if (choice) {
+      // ➕ 추가
+      incoming.forEach(it => {
+        it.id = Date.now() + Math.random(); // ID 충돌 방지
+        myData.push(it);
+      });
+    } else {
+      // ♻️ 덮어쓰기
+      myData = incoming.map(it => ({
+        ...it,
+        id: Date.now() + Math.random()
+      }));
+    }
+
+    items = myData;
+    save();
+    render();
+    jsonFile.value = "";
+  };
+
+  r.readAsText(f);
+};
+
 
 render();
 clearSearch.onclick = () => {
